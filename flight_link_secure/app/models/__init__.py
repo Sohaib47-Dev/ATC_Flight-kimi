@@ -217,8 +217,3 @@ def init_db(app):
         print("  Admin: admin / admin123")
         print("  ATC: atc / atc123")
         print("  Defense: defense / defense123")
-
-
-
-
-print("Models initialized")
