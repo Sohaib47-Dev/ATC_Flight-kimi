@@ -1,0 +1,342 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Flight-Link Secure{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-speedometer2 text-radar-blue"></i> Admin Dashboard</h2>
+            <p class="text-secondary mb-0">System Administration & Monitoring</p>
+        </div>
+        <span class="badge badge-role-admin fs-6">ADMINISTRATOR</span>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row g-3 mb-4">
+        <!-- Users Section -->
+        <div class="col-12">
+            <h5 class="text-secondary mb-3"><i class="bi bi-people-fill"></i> User Statistics</h5>
+        </div>
+        <div class="col-xl-3 col-lg-4 col-md-6">
+            <div class="card stat-card h-100">
+                <div class="stat-number">{{ stats.total_users }}</div>
+                <div class="stat-label">Total Users</div>
+                <i class="bi bi-people-fill stat-icon"></i>
+            </div>
+        </div>
+        <div class="col-xl-3 col-lg-4 col-md-6">
+            <div class="card stat-card h-100">
+                <div class="stat-number text-radar-green">{{ stats.active_users }}</div>
+                <div class="stat-label">Active Users</div>
+                <i class="bi bi-person-check-fill stat-icon text-radar-green"></i>
+            </div>
+        </div>
+        <div class="col-xl-3 col-lg-4 col-md-6">
+            <div class="card stat-card h-100">
+                <div class="stat-number text-secondary">{{ stats.inactive_users }}</div>
+                <div class="stat-label">Inactive Users</div>
+                <i class="bi bi-person-x-fill stat-icon text-secondary"></i>
+            </div>
+        </div>
+        <div class="col-xl-3 col-lg-4 col-md-6">
+            <div class="card stat-card h-100">
+                <div class="stat-number">{{ stats.total_flight_plans }}</div>
+                <div class="stat-label">Flight Plans</div>
+                <i class="bi bi-file-earmark-text-fill stat-icon"></i>
+            </div>
+        </div>
+
+        <!-- Tracks Section -->
+        <div class="col-12 mt-4">
+            <h5 class="text-secondary mb-3"><i class="bi bi-geo-alt-fill"></i> Track Statistics</h5>
+        </div>
+        <div class="col-xl-3 col-lg-4 col-md-6">
+            <div class="card stat-card h-100">
+                <div class="stat-number">{{ stats.total_tracks }}</div>
+                <div class="stat-label">Total Tracks</div>
+                <i class="bi bi-geo-alt-fill stat-icon"></i>
+            </div>
+        </div>
+        <div class="col-xl-3 col-lg-4 col-md-6">
+            <div class="card stat-card h-100">
+                <div class="stat-number text-radar-green">{{ stats.active_tracks }}</div>
+                <div class="stat-label">Active Tracks</div>
+                <i class="bi bi-activity stat-icon text-radar-green"></i>
+            </div>
+        </div>
+        <div class="col-xl-3 col-lg-4 col-md-6">
+            <div class="card stat-card h-100">
+                <div class="stat-number text-radar-cyan">{{ stats.completed_tracks }}</div>
+                <div class="stat-label">Completed</div>
+                <i class="bi bi-check-circle-fill stat-icon text-radar-cyan"></i>
+            </div>
+        </div>
+        <div class="col-xl-3 col-lg-4 col-md-6">
+            <div class="card stat-card h-100">
+                <div class="stat-number text-radar-amber">{{ stats.terminated_tracks }}</div>
+                <div class="stat-label">Terminated</div>
+                <i class="bi bi-x-circle-fill stat-icon text-radar-amber"></i>
+            </div>
+        </div>
+
+        <!-- Defense Section -->
+        <div class="col-12 mt-4">
+            <h5 class="text-secondary mb-3"><i class="bi bi-shield-fill-check"></i> Defense Integration</h5>
+        </div>
+        <div class="col-xl-3 col-lg-4 col-md-6">
+            <div class="card stat-card h-100">
+                <div class="stat-number text-radar-green">{{ stats.sent_to_defense }}</div>
+                <div class="stat-label">Sent to Defense</div>
+                <i class="bi bi-send-check-fill stat-icon text-radar-green"></i>
+            </div>
+        </div>
+        <div class="col-xl-3 col-lg-4 col-md-6">
+            <div class="card stat-card h-100">
+                <div class="stat-number text-radar-amber">{{ stats.pending_transfer }}</div>
+                <div class="stat-label">Pending Transfer</div>
+                <i class="bi bi-hourglass-split stat-icon text-radar-amber"></i>
+            </div>
+        </div>
+        <div class="col-xl-3 col-lg-4 col-md-6">
+            <div class="card stat-card h-100">
+                <div class="stat-number">{{ stats.defense_messages }}</div>
+                <div class="stat-label">Defense Messages</div>
+                <i class="bi bi-envelope-fill stat-icon"></i>
+            </div>
+        </div>
+        <div class="col-xl-3 col-lg-4 col-md-6">
+            <div class="card stat-card h-100">
+                <div class="stat-number {% if stats.duplicate_flight_plans > 0 %}text-radar-red{% else %}text-radar-cyan{% endif %}">
+                    {{ stats.duplicate_flight_plans }}
+                </div>
+                <div class="stat-label">Duplicate FPs</div>
+                <i class="bi bi-exclamation-triangle-fill stat-icon {% if stats.duplicate_flight_plans > 0 %}text-radar-red{% else %}text-radar-cyan{% endif %}"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-lightning-charge-fill"></i> Quick Actions
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <a href="{{ url_for('admin.admin_users') }}" class="btn btn-primary w-100 btn-lg">
+                        <i class="bi bi-people-fill"></i> Manage Users
+                    </a>
+                </div>
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <a href="{{ url_for('admin.admin_flight_plans') }}" class="btn btn-primary w-100 btn-lg">
+                        <i class="bi bi-file-earmark-text-fill"></i> Flight Plans
+                    </a>
+                </div>
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <a href="{{ url_for('admin.admin_track_data') }}" class="btn btn-primary w-100 btn-lg">
+                        <i class="bi bi-geo-alt-fill"></i> Track Data
+                    </a>
+                </div>
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <a href="{{ url_for('admin.admin_logs') }}" class="btn btn-primary w-100 btn-lg">
+                        <i class="bi bi-journal-text"></i> System Logs
+                    </a>
+                </div>
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <a href="{{ url_for('admin.admin_data_integrity') }}" class="btn btn-warning w-100 btn-lg">
+                        <i class="bi bi-shield-exclamation"></i> Data Integrity
+                    </a>
+                </div>
+                <div class="col-lg-2 col-md-4 col-sm-6">
+                    <a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-secondary w-100 btn-lg" onclick="location.reload(); return false;">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Recent Activity -->
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <i class="bi bi-clock-history"></i> Recent Activity
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 table-sm">
+                            <thead>
+                                <tr>
+                                    <th><i class="bi bi-clock"></i> Time</th>
+                                    <th><i class="bi bi-person"></i> User</th>
+                                    <th><i class="bi bi-lightning"></i> Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in recent_logs %}
+                                <tr>
+                                    <td class="text-nowrap">
+                                        <code class="text-radar-cyan" style="font-size: 0.75rem;">{{ log.timestamp.strftime('%H:%M:%S') }}</code>
+                                    </td>
+                                    <td><span class="badge badge-primary" style="font-size: 0.7rem;">{{ log.username }}</span></td>
+                                    <td>
+                                        <span class="badge bg-secondary" style="font-size: 0.7rem;">{{ log.action }}</span>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                                        No recent activity
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Submissions -->
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header" style="background: rgba(0, 255, 136, 0.1);">
+                    <i class="bi bi-file-earmark-plus-fill text-radar-green"></i> Recent Submissions
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 table-sm">
+                            <thead>
+                                <tr>
+                                    <th><i class="bi bi-clock"></i> Time</th>
+                                    <th><i class="bi bi-info-circle"></i> Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in recent_submissions %}
+                                <tr>
+                                    <td class="text-nowrap">
+                                        <code class="text-radar-cyan" style="font-size: 0.75rem;">{{ log.timestamp.strftime('%H:%M') }}</code>
+                                    </td>
+                                    <td>
+                                        <small class="text-secondary">{{ log.details or 'Flight plan added' }}</small>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="2" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                                        No submissions
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Transfers -->
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header" style="background: rgba(0, 212, 255, 0.1);">
+                    <i class="bi bi-send-check-fill text-radar-cyan"></i> Recent Transfers
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 table-sm">
+                            <thead>
+                                <tr>
+                                    <th><i class="bi bi-clock"></i> Time</th>
+                                    <th><i class="bi bi-info-circle"></i> Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in recent_transfers %}
+                                <tr>
+                                    <td class="text-nowrap">
+                                        <code class="text-radar-cyan" style="font-size: 0.75rem;">{{ log.timestamp.strftime('%H:%M') }}</code>
+                                    </td>
+                                    <td>
+                                        <small class="text-secondary">{{ log.details or 'Data transferred' }}</small>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="2" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                                        No transfers
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Online Users -->
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-person-check-fill"></i> Recent Logins
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th><i class="bi bi-person"></i> User</th>
+                                    <th><i class="bi bi-shield"></i> Role</th>
+                                    <th><i class="bi bi-activity"></i> Status</th>
+                                    <th><i class="bi bi-globe"></i> IP Address</th>
+                                    <th><i class="bi bi-clock"></i> Last Login</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in online_users %}
+                                <tr>
+                                    <td><strong class="text-radar-cyan">{{ user.username }}</strong></td>
+                                    <td>
+                                        <span class="badge badge-role-{{ user.role }}">{{ user.role.upper() }}</span>
+                                    </td>
+                                    <td>
+                                        {% if user.is_active %}
+                                            <span class="badge badge-success"><i class="bi bi-check-circle-fill"></i> Active</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary"><i class="bi bi-x-circle-fill"></i> Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td><code class="text-radar-blue">{{ user.last_login_ip or 'N/A' }}</code></td>
+                                    <td class="text-nowrap">
+                                        {% if user.last_login_time %}
+                                            <small class="text-secondary">{{ user.last_login_time.strftime('%Y-%m-%d %H:%M') }}</small>
+                                        {% else %}
+                                            <span class="text-muted">Never</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                                        No user data
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

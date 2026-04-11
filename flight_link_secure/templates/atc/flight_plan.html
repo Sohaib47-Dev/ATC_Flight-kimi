@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}Retrieve Flight Plan - Flight-Link Secure{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-search text-radar-blue"></i> Retrieve Flight Plan</h2>
+            <p class="text-secondary mb-0">Search for flight plan by callsign</p>
+        </div>
+        <a href="{{ url_for('atc.atc_dashboard') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Search Form -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-airplane-fill"></i> Enter Callsign
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('atc.atc_flight_plan') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row g-3 align-items-end">
+                    <div class="col-lg-8">
+                        <label for="callsign" class="form-label">
+                            <i class="bi bi-tag-fill"></i> Aircraft Callsign
+                        </label>
+                        <input type="text" class="form-control form-control-lg" id="callsign" name="callsign"
+                               placeholder="Enter aircraft callsign" value="{{ callsign }}" required autofocus>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle text-radar-cyan"></i> Enter the aircraft callsign to retrieve flight plan from database
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <button type="submit" class="btn btn-primary btn-lg w-100">
+                            <i class="bi bi-search"></i> Retrieve Flight Plan
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger">
+        <i class="bi bi-exclamation-triangle-fill"></i> <strong>Error:</strong> {{ error }}
+    </div>
+    {% endif %}
+
+    {% if parsed_data %}
+    <!-- Parsed Flight Plan Data -->
+    <div class="card border-success mb-4" style="border-width: 2px; border-color: var(--radar-green) !important;">
+        <div class="card-header" style="background: linear-gradient(135deg, rgba(0, 255, 136, 0.2) 0%, rgba(0, 204, 106, 0.15) 100%);">
+            <i class="bi bi-check-circle-fill text-radar-green"></i> Flight Plan Retrieved Successfully
+        </div>
+        <div class="card-body">
+            <h5 class="mb-4 text-radar-cyan"><i class="bi bi-database-fill-check"></i> Extracted Flight Data</h5>
+
+            <div class="row g-3 mb-3">
+                <div class="col-lg-3 col-md-6">
+                    <div class="p-3 rounded" style="background: rgba(0, 212, 255, 0.1); border-left: 4px solid var(--radar-blue);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-tag"></i> Callsign</small>
+                        <strong class="fs-4 text-radar-cyan">{{ parsed_data.callsign }}</strong>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="p-3 rounded" style="background: rgba(0, 255, 255, 0.1); border-left: 4px solid var(--radar-cyan);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-airplane"></i> Aircraft Type</small>
+                        <strong class="fs-4 text-radar-blue">{{ parsed_data.aircraft_type }}</strong>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="p-3 rounded" style="background: rgba(0, 255, 136, 0.1); border-left: 4px solid var(--radar-green);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-geo-fill"></i> Departure</small>
+                        <strong class="fs-4 text-radar-green">{{ parsed_data.departure }}</strong>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="p-3 rounded" style="background: rgba(255, 170, 0, 0.1); border-left: 4px solid var(--radar-amber);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-geo-alt-fill"></i> Destination</small>
+                        <strong class="fs-4 text-radar-amber">{{ parsed_data.destination }}</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-lg-4 col-md-6">
+                    <div class="p-3 rounded" style="background: rgba(0, 212, 255, 0.15); border: 1px solid var(--radar-blue);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-sign-turn-right"></i> FIR Entry Point</small>
+                        <strong class="fs-5 text-radar-cyan">{{ parsed_data.fir_entry }}</strong>
+                    </div>
+                </div>
+                <div class="col-lg-4 col-md-6">
+                    <div class="p-3 rounded" style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--radar-green);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-speedometer2"></i> Speed</small>
+                        <strong class="fs-5 text-radar-green">{{ parsed_data.speed }}</strong>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="p-3 rounded" style="background: rgba(139, 149, 168, 0.15); border: 1px solid var(--card-border);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-signpost-2-fill"></i> Route</small>
+                        <small class="font-monospace text-radar-blue">{{ parsed_data.route[:50] }}{% if parsed_data.route|length > 50 %}...{% endif %}</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 d-flex justify-content-between align-items-center p-3 rounded" style="background: rgba(0, 255, 136, 0.1);">
+                <span class="text-radar-green"><i class="bi bi-check-circle-fill fs-5"></i> <strong>Data extracted successfully</strong></span>
+                <a href="{{ url_for('atc.atc_estimates') }}" class="btn btn-success btn-lg">
+                    Proceed to Enter Estimates <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

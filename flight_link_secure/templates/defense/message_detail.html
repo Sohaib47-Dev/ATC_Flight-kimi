@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block title %}Message Detail - Flight-Link Secure{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-envelope-open-fill text-radar-blue"></i> Decrypted Message</h2>
+            <p class="text-secondary mb-0">View decrypted aircraft track data from ATC</p>
+        </div>
+        <a href="{{ url_for('defense.defense_dashboard') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Success Message -->
+    <div class="alert alert-success mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <i class="bi bi-shield-check-fill fs-4"></i>
+                <strong class="ms-2">Message decrypted successfully!</strong>
+            </div>
+            <small class="text-secondary">
+                <i class="bi bi-calendar-check"></i> Received: {{ message.received_at.strftime('%Y-%m-%d %H:%M:%S') }}
+            </small>
+        </div>
+    </div>
+
+    <!-- Decrypted Data -->
+    <div class="row">
+        <div class="col-lg-8 mb-4">
+            <div class="card" style="border: 2px solid var(--radar-green);">
+                <div class="card-header" style="background: linear-gradient(135deg, rgba(0, 255, 136, 0.2) 0%, rgba(0, 204, 106, 0.15) 100%);">
+                    <i class="bi bi-file-earmark-check-fill text-radar-green"></i> Aircraft Track Data
+                </div>
+                <div class="card-body">
+                    <h5 class="mb-4 text-radar-cyan">
+                        <i class="bi bi-airplane-fill"></i> Flight Information
+                    </h5>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <div class="p-3 rounded" style="background: rgba(0, 212, 255, 0.1); border-left: 4px solid var(--radar-blue);">
+                                <small class="text-secondary d-block mb-1"><i class="bi bi-tag"></i> Callsign</small>
+                                <strong class="fs-4 text-radar-cyan">{{ decrypted_data.callsign }}</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3 rounded" style="background: rgba(0, 255, 255, 0.1); border-left: 4px solid var(--radar-cyan);">
+                                <small class="text-secondary d-block mb-1"><i class="bi bi-airplane"></i> Aircraft Type</small>
+                                <strong class="fs-4 text-radar-blue">{{ decrypted_data.aircraft_type }}</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <div class="p-3 rounded" style="background: rgba(0, 255, 136, 0.1); border-left: 4px solid var(--radar-green);">
+                                <small class="text-secondary d-block mb-1"><i class="bi bi-geo-fill"></i> Departure</small>
+                                <strong class="fs-5 text-radar-green">{{ decrypted_data.departure }}</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3 rounded" style="background: rgba(255, 170, 0, 0.1); border-left: 4px solid var(--radar-amber);">
+                                <small class="text-secondary d-block mb-1"><i class="bi bi-geo-alt-fill"></i> Destination</small>
+                                <strong class="fs-5 text-radar-amber">{{ decrypted_data.destination }}</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="p-3 rounded" style="background: rgba(0, 212, 255, 0.15); border: 1px solid var(--radar-blue);">
+                                <small class="text-secondary d-block mb-1"><i class="bi bi-sign-turn-right"></i> FIR Entry Point</small>
+                                <strong class="text-radar-cyan">{{ decrypted_data.fir_entry }}</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 rounded" style="background: rgba(0, 255, 136, 0.15); border: 1px solid var(--radar-green);">
+                                <small class="text-secondary d-block mb-1"><i class="bi bi-speedometer2"></i> Speed</small>
+                                <strong class="text-radar-green">{{ decrypted_data.speed }}</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 rounded" style="background: rgba(139, 149, 168, 0.15); border: 1px solid var(--card-border);">
+                                <small class="text-secondary d-block mb-1"><i class="bi bi-signpost-2-fill"></i> Route</small>
+                                <small class="font-monospace text-radar-blue">{{ decrypted_data.route[:30] }}{% if decrypted_data.route|length > 30 %}...{% endif %}</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr style="border-color: var(--card-border);">
+
+                    <h6 class="text-secondary mb-3"><i class="bi bi-input-cursor-text"></i> ATC Estimates</h6>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <div class="p-3 rounded" style="background: linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(0, 168, 204, 0.15) 100%); border: 1px solid var(--radar-blue);">
+                                <small class="text-secondary d-block mb-1"><i class="bi bi-clock"></i> ETO (UTC)</small>
+                                <strong class="fs-5 text-radar-cyan">{{ decrypted_data.eto_utc[:2] }}:{{ decrypted_data.eto_utc[2:] }}</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 rounded" style="background: linear-gradient(135deg, rgba(0, 255, 255, 0.2) 0%, rgba(0, 204, 204, 0.15) 100%); border: 1px solid var(--radar-cyan);">
+                                <small class="text-secondary d-block mb-1"><i class="bi bi-clock-fill"></i> ETO (PST)</small>
+                                <strong class="fs-5 text-radar-blue">{{ decrypted_data.eto_pst[:2] }}:{{ decrypted_data.eto_pst[2:] }}</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 rounded" style="background: linear-gradient(135deg, rgba(0, 255, 136, 0.2) 0%, rgba(0, 204, 106, 0.15) 100%); border: 1px solid var(--radar-green);">
+                                <small class="text-secondary d-block mb-1"><i class="bi bi-layers"></i> CFL (Cleared Flight Level)</small>
+                                <strong class="fs-5 text-radar-green">FL{{ decrypted_data.cfl }}</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="p-3 rounded" style="background: linear-gradient(135deg, rgba(255, 170, 0, 0.2) 0%, rgba(204, 136, 0, 0.15) 100%); border: 1px solid var(--radar-amber);">
+                                <small class="text-secondary d-block mb-1"><i class="bi bi-broadcast-pin"></i> SSR Code</small>
+                                <strong class="fs-5 text-radar-amber">{{ decrypted_data.ssr }}</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3 rounded" style="background: rgba(139, 149, 168, 0.15); border: 1px solid var(--card-border);">
+                                <small class="text-secondary d-block mb-1"><i class="bi bi-activity"></i> Status</small>
+                                <strong class="fs-5 text-primary">{{ decrypted_data.status.upper() }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- Message Info -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="bi bi-info-circle-fill"></i> Message Information
+                </div>
+                <div class="card-body">
+                    <div class="mb-3 p-3 rounded" style="background: rgba(0, 212, 255, 0.1);">
+                        <small class="text-secondary d-block mb-1">Message ID</small>
+                        <code class="text-radar-cyan fs-5">{{ message.id }}</code>
+                    </div>
+                    <div class="mb-3 p-3 rounded" style="background: rgba(0, 255, 255, 0.1);">
+                        <small class="text-secondary d-block mb-1">Track ID</small>
+                        <code class="text-radar-blue fs-5">{{ message.track_data_id }}</code>
+                    </div>
+                    <div class="mb-3 p-3 rounded" style="background: rgba(0, 255, 136, 0.1);">
+                        <small class="text-secondary d-block mb-1">Received</small>
+                        <small class="text-radar-green">{{ message.received_at.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                    </div>
+                    <div class="mb-3 p-3 rounded" style="background: rgba(255, 170, 0, 0.1);">
+                        <small class="text-secondary d-block mb-1">Decrypted</small>
+                        <small class="text-radar-amber">{{ message.decrypted_at.strftime('%Y-%m-%d %H:%M:%S') if message.decrypted_at else 'N/A' }}</small>
+                    </div>
+                    <div class="p-3 rounded" style="background: rgba(139, 149, 168, 0.1);">
+                        <small class="text-secondary d-block mb-2">Status</small>
+                        {% if message.processed %}
+                            <span class="badge badge-success fs-6"><i class="bi bi-check-circle-fill"></i> Processed</span>
+                        {% else %}
+                            <span class="badge badge-warning fs-6"><i class="bi bi-clock-fill"></i> Pending</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-lightning-charge-fill"></i> Actions
+                </div>
+                <div class="card-body">
+                    <a href="{{ url_for('defense.defense_radar') }}" class="btn btn-success w-100 btn-lg mb-3">
+                        <i class="bi bi-radar"></i> View on Radar
+                    </a>
+                    <a href="{{ url_for('defense.defense_dashboard') }}" class="btn btn-secondary w-100">
+                        <i class="bi bi-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

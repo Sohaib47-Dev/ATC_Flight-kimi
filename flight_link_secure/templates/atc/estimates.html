@@ -1,0 +1,585 @@
+{% extends "base.html" %}
+
+{% block title %}Enter Estimates - Flight-Link Secure{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-input-cursor-text text-radar-blue"></i> Enter ATC Estimates</h2>
+            <p class="text-secondary mb-0">Provide estimated time, flight level, and SSR code</p>
+        </div>
+        <a href="{{ url_for('atc.atc_flight_plan') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back
+        </a>
+    </div>
+
+    {% if submitted %}
+    <!-- Success State - Ready to Transfer -->
+    <div class="card" style="border: 2px solid var(--radar-green);">
+        <div class="card-header" style="background: linear-gradient(135deg, rgba(0, 255, 136, 0.2) 0%, rgba(0, 204, 106, 0.15) 100%);">
+            <i class="bi bi-check-circle-fill text-radar-green"></i> Estimates Validated & Submitted
+        </div>
+        <div class="card-body text-center py-5">
+            <i class="bi bi-check-circle-fill text-radar-green" style="font-size: 5rem; filter: drop-shadow(0 0 20px rgba(0, 255, 136, 0.5));"></i>
+            <h3 class="mt-4 text-radar-cyan">Track Data Created Successfully!</h3>
+            <p class="text-secondary fs-5 mb-0">The aircraft track has been created with your estimates.</p>
+
+            <div class="alert alert-info mt-4 mx-auto" style="max-width: 600px;">
+                <i class="bi bi-info-circle-fill"></i>
+                <strong>Next Step:</strong> Transfer the encrypted data to the Defense system.
+            </div>
+
+            <form method="POST" action="{{ url_for('atc.atc_transfer') }}" class="mt-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-success btn-lg px-5">
+                    <i class="bi bi-shield-lock-fill"></i> Transfer to Defense System
+                </button>
+            </form>
+        </div>
+    </div>
+    {% elif already_active %}
+    <!-- Already Active Error State -->
+    <div class="card" style="border: 2px solid var(--radar-red);">
+        <div class="card-header" style="background: linear-gradient(135deg, rgba(255, 71, 87, 0.2) 0%, rgba(204, 0, 0, 0.15) 100%);">
+            <i class="bi bi-exclamation-octagon-fill text-radar-red"></i> Flight Plan Already Active
+        </div>
+        <div class="card-body text-center py-5">
+            <i class="bi bi-exclamation-triangle-fill text-radar-red" style="font-size: 5rem; filter: drop-shadow(0 0 20px rgba(255, 71, 87, 0.5));"></i>
+            <h3 class="mt-4 text-radar-red">Estimate Cannot Be Entered</h3>
+            <p class="text-secondary fs-5 mb-4">This flight plan already has an active track in the system.</p>
+
+            <div class="alert alert-danger mx-auto" style="max-width: 700px;">
+                <h5 class="alert-heading">
+                    <i class="bi bi-shield-exclamation"></i> Operational Restriction
+                </h5>
+                <p class="mb-0">
+                    <strong>Callsign {{ parsed_data.callsign }}</strong> is currently active with an existing track.
+                    Only one active track is permitted per flight plan for operational safety and data integrity.
+                </p>
+            </div>
+
+            <div class="mt-4">
+                <a href="{{ url_for('atc.atc_dashboard') }}" class="btn btn-primary btn-lg me-2">
+                    <i class="bi bi-speedometer2"></i> Return to Dashboard
+                </a>
+                <a href="{{ url_for('atc.atc_flight_plan') }}" class="btn btn-secondary btn-lg">
+                    <i class="bi bi-search"></i> Search Another Flight Plan
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Flight Data Summary (Read-only) -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <i class="bi bi-airplane-fill"></i> Flight Data Summary (Active Track Exists)
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-lg-3 col-md-6">
+                    <div class="p-3 rounded" style="background: rgba(0, 212, 255, 0.1); border-left: 4px solid var(--radar-blue);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-tag"></i> Callsign</small>
+                        <strong class="fs-5 text-radar-cyan">{{ parsed_data.callsign }}</strong>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="p-3 rounded" style="background: rgba(0, 255, 255, 0.1); border-left: 4px solid var(--radar-cyan);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-airplane"></i> Aircraft Type</small>
+                        <strong class="fs-5 text-radar-blue">{{ parsed_data.aircraft_type }}</strong>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="p-3 rounded" style="background: rgba(0, 255, 136, 0.1); border-left: 4px solid var(--radar-green);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-geo-fill"></i> Departure</small>
+                        <strong class="fs-5 text-radar-green">{{ parsed_data.departure }}</strong>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="p-3 rounded" style="background: rgba(255, 170, 0, 0.1); border-left: 4px solid var(--radar-amber);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-geo-alt-fill"></i> Destination</small>
+                        <strong class="fs-5 text-radar-amber">{{ parsed_data.destination }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- Flight Data Summary -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-airplane-fill"></i> Flight Data Summary
+        </div>
+        <div class="card-body">
+            <div class="row g-3 mb-3">
+                <div class="col-lg-3 col-md-6">
+                    <div class="p-3 rounded" style="background: rgba(0, 212, 255, 0.1); border-left: 4px solid var(--radar-blue);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-tag"></i> Callsign</small>
+                        <strong class="fs-5 text-radar-cyan">{{ parsed_data.callsign }}</strong>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="p-3 rounded" style="background: rgba(0, 255, 255, 0.1); border-left: 4px solid var(--radar-cyan);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-airplane"></i> Aircraft Type</small>
+                        <strong class="fs-5 text-radar-blue">{{ parsed_data.aircraft_type }}</strong>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="p-3 rounded" style="background: rgba(0, 255, 136, 0.1); border-left: 4px solid var(--radar-green);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-geo-fill"></i> Departure</small>
+                        <strong class="fs-5 text-radar-green">{{ parsed_data.departure }}</strong>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="p-3 rounded" style="background: rgba(255, 170, 0, 0.1); border-left: 4px solid var(--radar-amber);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-geo-alt-fill"></i> Destination</small>
+                        <strong class="fs-5 text-radar-amber">{{ parsed_data.destination }}</strong>
+                    </div>
+                </div>
+            </div>
+            <div class="row g-3">
+                <div class="col-lg-4">
+                    <div class="p-3 rounded" style="background: rgba(0, 212, 255, 0.1); border: 1px solid var(--radar-blue);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-sign-turn-right"></i> FIR Entry Point</small>
+                        <strong class="text-radar-cyan">{{ parsed_data.fir_entry }}</strong>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="p-3 rounded" style="background: rgba(0, 255, 136, 0.1); border: 1px solid var(--radar-green);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-speedometer2"></i> Speed</small>
+                        <strong class="text-radar-green">{{ parsed_data.speed }}</strong>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="p-3 rounded" style="background: rgba(139, 149, 168, 0.1); border: 1px solid var(--card-border);">
+                        <small class="text-secondary d-block mb-1"><i class="bi bi-signpost-2-fill"></i> Route</small>
+                        <small class="font-monospace text-radar-blue">{{ parsed_data.route[:40] }}{% if parsed_data.route|length > 40 %}...{% endif %}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estimate Entry Form -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-pencil-square"></i> Enter Estimates
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('atc.atc_estimates') }}" id="estimatesForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row g-4">
+                    <!-- ETO Field -->
+                    <div class="col-lg-4">
+                        <label for="eto" class="form-label">
+                            <i class="bi bi-clock-fill text-radar-blue"></i> ETO (UTC)
+                            <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control form-control-lg" id="eto" name="eto"
+                               placeholder="HHMM (e.g., 1430)" maxlength="4" required>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle text-radar-cyan"></i> Estimated Time Over in UTC (HHMM format)
+                        </div>
+                        <div class="form-text text-info">
+                            <i class="bi bi-arrow-repeat"></i> Will be converted to Pakistan Time (UTC+5)
+                        </div>
+
+                        {% if validation_result and not validation_result.eto.valid %}
+                        <div class="validation-error mt-2">
+                            <i class="bi bi-exclamation-circle-fill"></i> {{ validation_result.eto.message }}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- CFL Field -->
+                    <div class="col-lg-4">
+                        <label for="cfl" class="form-label">
+                            <i class="bi bi-layers-fill text-radar-cyan"></i> CFL (Cleared Flight Level)
+                            <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control form-control-lg" id="cfl" name="cfl"
+                               placeholder="3 digits (e.g., 350)" maxlength="3" required>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle text-radar-cyan"></i> Exactly 3 digits, max 500 (e.g., 350 = FL350)
+                        </div>
+
+                        {% if validation_result and not validation_result.cfl.valid %}
+                        <div class="validation-error mt-2">
+                            <i class="bi bi-exclamation-circle-fill"></i> {{ validation_result.cfl.message }}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- SSR Field -->
+                    <div class="col-lg-4">
+                        <label for="ssr" class="form-label">
+                            <i class="bi bi-broadcast-pin text-radar-green"></i> SSR Code
+                            <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control form-control-lg" id="ssr" name="ssr"
+                               placeholder="4 digits (e.g., 4523)" maxlength="4" required>
+                        <div class="form-text">
+                            <i class="bi bi-info-circle text-radar-cyan"></i> Exactly 4 digits, no repeated digits (e.g., 1111)
+                        </div>
+
+                        {% if validation_result and not validation_result.ssr.valid %}
+                        <div class="validation-error mt-2">
+                            <i class="bi bi-exclamation-circle-fill"></i> {{ validation_result.ssr.message }}
+                        </div>
+                        {% if validation_result.ssr.corrected %}
+                        <div class="validation-success mt-2">
+                            <i class="bi bi-check-circle-fill"></i> Auto-corrected to: <strong>{{ validation_result.ssr.corrected }}</strong>
+                        </div>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Real-time Validation Display -->
+                <div id="validationDisplay" class="mt-4 p-4 rounded d-none" style="background: rgba(0, 212, 255, 0.1); border: 1px solid var(--radar-blue);">
+                    <h6 class="text-radar-cyan mb-3"><i class="bi bi-check-square"></i> Validation Status</h6>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="p-3 rounded" style="background: rgba(30, 36, 51, 0.8);">
+                                <small class="text-secondary d-block mb-2">ETO (UTC):</small>
+                                <span id="etoStatus" class="badge bg-secondary">-</span>
+                                <div id="etoPst" class="small text-radar-cyan mt-2"></div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 rounded" style="background: rgba(30, 36, 51, 0.8);">
+                                <small class="text-secondary d-block mb-2">CFL:</small>
+                                <span id="cflStatus" class="badge bg-secondary">-</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 rounded" style="background: rgba(30, 36, 51, 0.8);">
+                                <small class="text-secondary d-block mb-2">SSR:</small>
+                                <span id="ssrStatus" class="badge bg-secondary">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4 d-flex justify-content-between">
+                    <a href="{{ url_for('atc.atc_flight_plan') }}" class="btn btn-secondary btn-lg">
+                        <i class="bi bi-arrow-left"></i> Back
+                    </a>
+                    <button type="submit" class="btn btn-primary btn-lg px-5">
+                        <i class="bi bi-check-circle-fill"></i> Validate & Submit
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Validation Rules -->
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-info-circle-fill"></i> Validation Rules
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-lg-4">
+                    <div class="p-3 rounded mb-3" style="background: rgba(0, 212, 255, 0.1); border-left: 4px solid var(--radar-blue);">
+                        <h6 class="text-radar-cyan"><i class="bi bi-clock-fill"></i> ETO (Estimated Time Over)</h6>
+                        <ul class="text-secondary mb-0">
+                            <li>Format: HHMM (UTC)</li>
+                            <li>Hours: 00-23</li>
+                            <li>Minutes: 00-59</li>
+                            <li>Auto-converts to Pakistan Time (UTC+5)</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="p-3 rounded mb-3" style="background: rgba(0, 255, 255, 0.1); border-left: 4px solid var(--radar-cyan);">
+                        <h6 class="text-radar-cyan"><i class="bi bi-layers-fill"></i> CFL (Cleared Flight Level)</h6>
+                        <ul class="text-secondary mb-0">
+                            <li>Exactly 3 digits</li>
+                            <li>Maximum: 500</li>
+                            <li>Example: 350 = FL350</li>
+                            <li>Rejected: 50, 0500, FL600</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="p-3 rounded mb-3" style="background: rgba(0, 255, 136, 0.1); border-left: 4px solid var(--radar-green);">
+                        <h6 class="text-radar-green"><i class="bi bi-broadcast-pin"></i> SSR Code</h6>
+                        <ul class="text-secondary mb-0">
+                            <li>Exactly 4 digits</li>
+                            <li>No letters allowed</li>
+                            <li>No repeated digits (1111, 2222)</li>
+                            <li>Auto-corrected if invalid</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const etoInput = document.getElementById('eto');
+    const cflInput = document.getElementById('cfl');
+    const ssrInput = document.getElementById('ssr');
+    const submitBtn = document.querySelector('#estimatesForm button[type="submit"]');
+    const validationDisplay = document.getElementById('validationDisplay');
+    const etoStatus = document.getElementById('etoStatus');
+    const etoPst = document.getElementById('etoPst');
+    const cflStatus = document.getElementById('cflStatus');
+    const ssrStatus = document.getElementById('ssrStatus');
+
+    let validationState = {
+        eto: false,
+        cfl: false,
+        ssr: false
+    };
+
+    // Generate random SSR starting with 4
+    function generateRandomSSR() {
+        const digits = '0123456789';
+        let ssr = '4'; // Start with 4
+        for (let i = 0; i < 3; i++) {
+            ssr += digits[Math.floor(Math.random() * digits.length)];
+        }
+        return ssr;
+    }
+
+    // Check if all digits are the same
+    function hasRepeatedDigits(value) {
+        if (value.length !== 4) return false;
+        return value[0] === value[1] && value[1] === value[2] && value[2] === value[3];
+    }
+
+    // Convert UTC to PST (UTC+5)
+    function convertToPST(utcHHMM) {
+        const hours = parseInt(utcHHMM.substring(0, 2));
+        const minutes = utcHHMM.substring(2, 4);
+        let pstHours = hours + 5;
+        if (pstHours >= 24) {
+            pstHours -= 24;
+        }
+        return String(pstHours).padStart(2, '0') + minutes;
+    }
+
+    // Update submit button state
+    function updateSubmitButton() {
+        if (validationState.eto && validationState.cfl && validationState.ssr) {
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('btn-secondary');
+            submitBtn.classList.add('btn-primary');
+        } else {
+            submitBtn.disabled = true;
+            submitBtn.classList.remove('btn-primary');
+            submitBtn.classList.add('btn-secondary');
+        }
+    }
+
+    // Validate ETO field
+    function validateETO() {
+        const value = etoInput.value.trim();
+
+        if (value === '') {
+            etoInput.style.borderColor = '';
+            etoStatus.className = 'badge bg-secondary';
+            etoStatus.textContent = '-';
+            etoPst.innerHTML = '';
+            validationState.eto = false;
+            updateSubmitButton();
+            return;
+        }
+
+        // Must be numeric and exactly 4 digits
+        if (!/^\d{4}$/.test(value)) {
+            etoInput.style.borderColor = '#ff4757';
+            etoInput.style.borderWidth = '2px';
+            etoStatus.className = 'badge badge-danger';
+            etoStatus.textContent = '✗ Must be 4 digits';
+            etoPst.innerHTML = '';
+            validationState.eto = false;
+            updateSubmitButton();
+            return;
+        }
+
+        const hours = parseInt(value.substring(0, 2));
+        const minutes = parseInt(value.substring(2, 4));
+
+        // Validate hours (0-23) and minutes (0-59)
+        if (hours > 23 || minutes > 59) {
+            etoInput.style.borderColor = '#ff4757';
+            etoInput.style.borderWidth = '2px';
+            etoStatus.className = 'badge badge-danger';
+            etoStatus.textContent = '✗ Invalid time';
+            etoPst.innerHTML = '';
+            validationState.eto = false;
+            updateSubmitButton();
+            return;
+        }
+
+        // Valid ETO
+        etoInput.style.borderColor = '#00ff88';
+        etoInput.style.borderWidth = '2px';
+        etoStatus.className = 'badge badge-success';
+        etoStatus.textContent = '✓ Valid';
+
+        const pstTime = convertToPST(value);
+        etoPst.innerHTML = '<i class="bi bi-clock-fill"></i> PST: <strong>' + pstTime.substring(0, 2) + ':' + pstTime.substring(2) + '</strong>';
+
+        validationState.eto = true;
+        validationDisplay.classList.remove('d-none');
+        updateSubmitButton();
+    }
+
+    // Validate CFL field
+    function validateCFL() {
+        const value = cflInput.value.trim();
+
+        if (value === '') {
+            cflInput.style.borderColor = '';
+            cflStatus.className = 'badge bg-secondary';
+            cflStatus.textContent = '-';
+            validationState.cfl = false;
+            updateSubmitButton();
+            return;
+        }
+
+        // Must be exactly 3 digits
+        if (!/^\d{3}$/.test(value)) {
+            cflInput.style.borderColor = '#ff4757';
+            cflInput.style.borderWidth = '2px';
+            cflStatus.className = 'badge badge-danger';
+            cflStatus.textContent = '✗ Must be 3 digits';
+            validationState.cfl = false;
+            updateSubmitButton();
+            return;
+        }
+
+        const flightLevel = parseInt(value);
+
+        // Must be <= 500
+        if (flightLevel > 500) {
+            cflInput.style.borderColor = '#ff4757';
+            cflInput.style.borderWidth = '2px';
+            cflStatus.className = 'badge badge-danger';
+            cflStatus.textContent = '✗ Max FL500';
+            validationState.cfl = false;
+            updateSubmitButton();
+            return;
+        }
+
+        // Valid CFL
+        cflInput.style.borderColor = '#00ff88';
+        cflInput.style.borderWidth = '2px';
+        cflStatus.className = 'badge badge-success';
+        cflStatus.textContent = '✓ FL' + value;
+        validationState.cfl = true;
+        validationDisplay.classList.remove('d-none');
+        updateSubmitButton();
+    }
+
+    // Validate SSR field with auto-correction
+    function validateSSR() {
+        const value = ssrInput.value.trim();
+
+        if (value === '') {
+            ssrInput.style.borderColor = '';
+            ssrStatus.className = 'badge bg-secondary';
+            ssrStatus.textContent = '-';
+            validationState.ssr = false;
+            updateSubmitButton();
+            return;
+        }
+
+        // Must be exactly 4 digits
+        if (!/^\d{4}$/.test(value)) {
+            ssrInput.style.borderColor = '#ff4757';
+            ssrInput.style.borderWidth = '2px';
+            ssrStatus.className = 'badge badge-danger';
+            ssrStatus.textContent = '✗ Must be 4 digits';
+            validationState.ssr = false;
+            updateSubmitButton();
+            return;
+        }
+
+        // Check for repeated digits (1111, 2222, etc.) and auto-correct
+        if (hasRepeatedDigits(value)) {
+            const newSSR = generateRandomSSR();
+            ssrInput.value = newSSR;
+            ssrInput.style.borderColor = '#ffaa00';
+            ssrInput.style.borderWidth = '2px';
+            ssrStatus.className = 'badge badge-warning';
+            ssrStatus.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Auto-corrected: <strong>' + newSSR + '</strong>';
+
+            // Create temporary notification
+            const notification = document.createElement('div');
+            notification.className = 'alert alert-warning mt-2';
+            notification.style.animation = 'fadeIn 0.3s';
+            notification.innerHTML = '<i class="bi bi-shield-check"></i> <strong>SSR auto-corrected for operational safety</strong> (Repeated digits detected)';
+            ssrInput.parentElement.appendChild(notification);
+
+            // Remove notification after 5 seconds
+            setTimeout(() => {
+                notification.style.animation = 'fadeOut 0.3s';
+                setTimeout(() => notification.remove(), 300);
+            }, 5000);
+
+            validationState.ssr = true;
+            validationDisplay.classList.remove('d-none');
+            updateSubmitButton();
+            return;
+        }
+
+        // Valid SSR
+        ssrInput.style.borderColor = '#00ff88';
+        ssrInput.style.borderWidth = '2px';
+        ssrStatus.className = 'badge badge-success';
+        ssrStatus.textContent = '✓ ' + value;
+        validationState.ssr = true;
+        validationDisplay.classList.remove('d-none');
+        updateSubmitButton();
+    }
+
+    // Attach input event listeners
+    etoInput.addEventListener('input', validateETO);
+    cflInput.addEventListener('input', validateCFL);
+    ssrInput.addEventListener('input', validateSSR);
+
+    // Force numeric input only for all fields
+    etoInput.addEventListener('keypress', function(e) {
+        if (!/\d/.test(e.key)) {
+            e.preventDefault();
+        }
+    });
+    cflInput.addEventListener('keypress', function(e) {
+        if (!/\d/.test(e.key)) {
+            e.preventDefault();
+        }
+    });
+    ssrInput.addEventListener('keypress', function(e) {
+        if (!/\d/.test(e.key)) {
+            e.preventDefault();
+        }
+    });
+
+    // Disable submit button initially
+    submitBtn.disabled = true;
+    submitBtn.classList.remove('btn-primary');
+    submitBtn.classList.add('btn-secondary');
+});
+</script>
+
+<style>
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeOut {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-10px); }
+}
+</style>
+{% endblock %}

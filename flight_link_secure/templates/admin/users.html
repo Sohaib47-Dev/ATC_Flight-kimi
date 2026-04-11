@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+
+{% block title %}Users - Flight-Link Secure{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-people-fill text-radar-blue"></i> User Management</h2>
+            <p class="text-secondary mb-0">View and manage system users</p>
+        </div>
+        <a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-person-lines-fill"></i> All Users
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th><i class="bi bi-hash"></i> ID</th>
+                            <th><i class="bi bi-person"></i> Username</th>
+                            <th><i class="bi bi-shield"></i> Role</th>
+                            <th><i class="bi bi-activity"></i> Status</th>
+                            <th><i class="bi bi-globe"></i> Last Login IP</th>
+                            <th><i class="bi bi-clock"></i> Last Login Time</th>
+                            <th><i class="bi bi-calendar"></i> Created At</th>
+                            <th class="text-center"><i class="bi bi-gear"></i> Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr id="user-row-{{ user.id }}">
+                            <td><code class="text-radar-cyan">{{ user.id }}</code></td>
+                            <td><strong class="text-radar-blue">{{ user.username }}</strong></td>
+                            <td>
+                                <span class="badge badge-role-{{ user.role }}">{{ user.role.upper() }}</span>
+                            </td>
+                            <td>
+                                {% if user.is_active %}
+                                    <span class="badge badge-success"><i class="bi bi-check-circle-fill"></i> Active</span>
+                                {% else %}
+                                    <span class="badge bg-secondary"><i class="bi bi-x-circle-fill"></i> Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td><code class="text-radar-amber">{{ user.last_login_ip or 'N/A' }}</code></td>
+                            <td class="text-nowrap">
+                                {% if user.last_login_time %}
+                                    <small class="text-secondary">{{ user.last_login_time.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                                {% else %}
+                                    <span class="text-muted">Never</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-nowrap"><small class="text-secondary">{{ user.created_at.strftime('%Y-%m-%d') }}</small></td>
+                            <td class="text-center">
+                                <div class="btn-group" role="group">
+                                    {% if user.is_active %}
+                                    <button type="button" class="btn btn-sm btn-warning"
+                                            onclick="toggleUserStatus({{ user.id }}, false)"
+                                            title="Deactivate User">
+                                        <i class="bi bi-pause-circle"></i>
+                                    </button>
+                                    {% else %}
+                                    <button type="button" class="btn btn-sm btn-success"
+                                            onclick="toggleUserStatus({{ user.id }}, true)"
+                                            title="Activate User">
+                                        <i class="bi bi-play-circle"></i>
+                                    </button>
+                                    {% endif %}
+                                    <button type="button" class="btn btn-sm btn-primary"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#editUserModal{{ user.id }}"
+                                            title="Edit User">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-info"
+                                            onclick="resetPassword({{ user.id }}, '{{ user.username }}')"
+                                            title="Reset Password">
+                                        <i class="bi bi-key"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                                <strong>No users found</strong>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit User Modals -->
+    {% for user in users %}
+    <div class="modal fade" id="editUserModal{{ user.id }}" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content bg-card-dark border-secondary">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-radar-cyan">
+                        <i class="bi bi-pencil me-2"></i>
+                        Edit User: {{ user.username }}
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="editUserForm{{ user.id }}" onsubmit="updateUser(event, {{ user.id }})">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="username{{ user.id }}" class="form-label">
+                                <i class="bi bi-person me-2"></i>Username
+                            </label>
+                            <input type="text" class="form-control" id="username{{ user.id }}"
+                                   value="{{ user.username }}" required readonly disabled
+                                   style="background-color: rgba(139, 149, 168, 0.1);">
+                            <small class="text-muted">Username cannot be changed</small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="role{{ user.id }}" class="form-label">
+                                <i class="bi bi-shield me-2"></i>Role
+                            </label>
+                            <select class="form-select" id="role{{ user.id }}" required>
+                                <option value="atc" {% if user.role == 'atc' %}selected{% endif %}>ATC Operator</option>
+                                <option value="defense" {% if user.role == 'defense' %}selected{% endif %}>Defense Operator</option>
+                                <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Administrator</option>
+                            </select>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="isActive{{ user.id }}"
+                                   {% if user.is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="isActive{{ user.id }}">
+                                Account Active
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-secondary">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </button>
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-circle"></i> Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+function toggleUserStatus(userId, activate) {
+    if (!confirm(`Are you sure you want to ${activate ? 'activate' : 'deactivate'} this user?`)) {
+        return;
+    }
+
+    fetch(`/admin/users/${userId}/toggle-status`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ is_active: activate })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Error updating user status');
+        console.error(error);
+    });
+}
+
+function resetPassword(userId, username) {
+    const newPassword = prompt(`Enter new password for user "${username}":`);
+    if (!newPassword) {
+        return;
+    }
+
+    if (newPassword.length < 6) {
+        alert('Password must be at least 6 characters long');
+        return;
+    }
+
+    fetch(`/admin/users/${userId}/reset-password`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ new_password: newPassword })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Password reset successfully');
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Error resetting password');
+        console.error(error);
+    });
+}
+
+function updateUser(event, userId) {
+    event.preventDefault();
+
+    const role = document.getElementById(`role${userId}`).value;
+    const isActive = document.getElementById(`isActive${userId}`).checked;
+
+    fetch(`/admin/users/${userId}/update`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ role: role, is_active: isActive })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Error updating user');
+        console.error(error);
+    });
+}
+</script>
+
+<style>
+.modal-content {
+    border-radius: 16px;
+}
+
+.modal-header, .modal-footer {
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(0, 168, 204, 0.05) 100%);
+}
+
+.btn-close {
+    filter: brightness(0) invert(1);
+    opacity: 0.8;
+}
+
+.btn-close:hover {
+    opacity: 1;
+}
+</style>
+{% endblock %}

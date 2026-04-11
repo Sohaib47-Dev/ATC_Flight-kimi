@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Defense Dashboard - Flight-Link Secure{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-shield-fill-check text-radar-green"></i> Defense Dashboard</h2>
+            <p class="text-secondary mb-0">Defense Operations & Radar Monitoring</p>
+        </div>
+        <span class="badge badge-role-defense fs-6">DEFENSE OPERATOR</span>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row g-4 mb-4">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <i class="bi bi-lightning-charge"></i> Quick Actions
+                </div>
+                <div class="card-body">
+                    <a href="{{ url_for('defense.defense_radar') }}" class="btn btn-success btn-lg w-100 mb-3">
+                        <i class="bi bi-radar"></i> Open Radar Simulator
+                    </a>
+                    <p class="text-secondary mb-0">
+                        <i class="bi bi-info-circle text-radar-cyan"></i> View real-time aircraft positions on the Pakistan FIR radar display.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <i class="bi bi-diagram-3"></i> Defense Workflow
+                </div>
+                <div class="card-body">
+                    <ol class="mb-0 text-secondary">
+                        <li class="mb-2"><i class="bi bi-1-circle text-radar-green"></i> Receive encrypted ATC messages</li>
+                        <li class="mb-2"><i class="bi bi-2-circle text-radar-green"></i> Decrypt and verify data</li>
+                        <li class="mb-2"><i class="bi bi-3-circle text-radar-green"></i> View aircraft on radar simulator</li>
+                        <li class="mb-2"><i class="bi bi-4-circle text-radar-green"></i> Monitor aircraft movement</li>
+                        <li class="mb-0"><i class="bi bi-5-circle text-radar-green"></i> Track completion status</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Received Messages -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-envelope-fill"></i> Received Messages from ATC
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th><i class="bi bi-hash"></i> ID</th>
+                            <th><i class="bi bi-link-45deg"></i> Track ID</th>
+                            <th><i class="bi bi-calendar"></i> Received At</th>
+                            <th><i class="bi bi-activity"></i> Status</th>
+                            <th><i class="bi bi-eye"></i> Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for msg in messages %}
+                        <tr>
+                            <td><code class="text-radar-cyan">{{ msg.id }}</code></td>
+                            <td><code class="text-radar-blue">{{ msg.track_data_id }}</code></td>
+                            <td class="text-nowrap"><small class="text-secondary">{{ msg.received_at.strftime('%Y-%m-%d %H:%M:%S') }}</small></td>
+                            <td>
+                                {% if msg.processed %}
+                                    <span class="badge badge-success"><i class="bi bi-check-circle-fill"></i> Processed</span>
+                                {% else %}
+                                    <span class="badge badge-warning"><i class="bi bi-clock-fill"></i> Pending</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('defense.defense_message_detail', message_id=msg.id) }}" class="btn btn-sm btn-primary">
+                                    <i class="bi bi-eye-fill"></i> View & Decrypt
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                                <strong>No messages received yet</strong><br>
+                                <small>Messages will appear here when ATC transfers data</small>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Tracks -->
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-geo-alt-fill"></i> Active Tracks
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th><i class="bi bi-hash"></i> Callsign</th>
+                            <th><i class="bi bi-airplane"></i> Aircraft</th>
+                            <th><i class="bi bi-signpost-2"></i> Route</th>
+                            <th><i class="bi bi-geo-alt"></i> FIR Entry</th>
+                            <th><i class="bi bi-layers"></i> CFL</th>
+                            <th><i class="bi bi-broadcast"></i> SSR</th>
+                            <th><i class="bi bi-activity"></i> Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for track in active_tracks %}
+                        <tr>
+                            <td><span class="badge badge-primary">{{ track.callsign }}</span></td>
+                            <td><strong class="text-radar-cyan">{{ track.aircraft_type }}</strong></td>
+                            <td class="font-monospace small">{{ track.departure }} <i class="bi bi-arrow-right text-radar-green"></i> {{ track.destination }}</td>
+                            <td><span class="badge badge-success">{{ track.fir_entry }}</span></td>
+                            <td><span class="badge bg-secondary">FL{{ track.cfl }}</span></td>
+                            <td><code class="text-radar-amber">{{ track.ssr }}</code></td>
+                            <td>
+                                {% if track.status == 'active' %}
+                                    <span class="badge badge-success"><i class="bi bi-circle-fill"></i> Active</span>
+                                {% else %}
+                                    <span class="badge bg-secondary"><i class="bi bi-check-circle"></i> Completed</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                                <strong>No active tracks</strong><br>
+                                <small>Tracks will appear here when ATC transfers data</small>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

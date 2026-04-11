@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}Add Flight Plan - Flight-Link Secure{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="text-radar-cyan fw-bold">
+                <i class="bi bi-plus-circle me-3"></i>Add Flight Plan
+            </h1>
+            <p class="text-secondary">Submit a new ICAO flight plan to the system</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            {% if duplicate_callsign and not has_active_tracks %}
+            <!-- Duplicate Confirmation Alert -->
+            <div class="alert alert-warning mb-4">
+                <h5 class="alert-heading">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Flight Plan Already Exists
+                </h5>
+                <p class="mb-3">
+                    A flight plan with callsign <strong class="text-radar-amber">{{ duplicate_callsign }}</strong> already exists in the database.
+                </p>
+                <p class="mb-3">
+                    <strong>Would you like to replace it with the new flight plan?</strong>
+                </p>
+                <form method="POST" action="{{ url_for('atc.atc_add_flight_plan') }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="callsign" value="{{ duplicate_callsign }}">
+                    <input type="hidden" name="raw_flight_plan" value="{{ duplicate_data }}">
+                    <input type="hidden" name="replace_existing" value="true">
+                    <button type="submit" class="btn btn-warning me-2">
+                        <i class="bi bi-arrow-repeat me-2"></i>
+                        Yes, Replace Existing Plan
+                    </button>
+                    <a href="{{ url_for('atc.atc_add_flight_plan') }}" class="btn btn-secondary">
+                        <i class="bi bi-x-circle me-2"></i>
+                        Cancel
+                    </a>
+                </form>
+            </div>
+            {% endif %}
+
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-file-earmark-plus"></i>
+                    Flight Plan Submission Form
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('atc.atc_add_flight_plan') }}" id="addFlightPlanForm">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="mb-4">
+                            <label for="callsign" class="form-label">
+                                <i class="bi bi-tag-fill me-2"></i>Aircraft Callsign
+                            </label>
+                            <input type="text"
+                                   class="form-control"
+                                   id="callsign"
+                                   name="callsign"
+                                   placeholder="e.g., PIA777, PAK123"
+                                   required
+                                   maxlength="20"
+                                   pattern="[A-Z0-9\-]+"
+                                   style="text-transform: uppercase;"
+                                   oninput="this.value = this.value.toUpperCase()">
+                            <small class="text-secondary mt-2 d-block">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Alphanumeric characters and hyphens only
+                            </small>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="raw_flight_plan" class="form-label">
+                                <i class="bi bi-file-text me-2"></i>Raw ICAO Flight Plan
+                            </label>
+                            <textarea class="form-control"
+                                      id="raw_flight_plan"
+                                      name="raw_flight_plan"
+                                      rows="12"
+                                      required
+                                      style="font-family: 'Courier New', monospace; font-size: 0.9rem;"
+                                      placeholder="Enter ICAO flight plan format:
+
+Example:
+(FPL-PIA777-IS
+-B77W/H-SDE2E3FGHIJ1J5J6M1RWXY/LB1
+-OPRN1530
+-N0490F370 DCT PETAR DCT RUROT DCT
+-OMDB0300 OMAD
+-PBN/A1B1C1D1L1O1S1 DOF/250302 REG/APBGC EET/OPRF0015 OMMS0220 SEL/BEQG CODE/C0DF31 RMK/TCAS EQUIPPED)"></textarea>
+                            <small class="text-secondary mt-2 d-block">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Enter complete ICAO format flight plan. System will validate before submission.
+                            </small>
+                        </div>
+
+                        <div class="d-flex gap-3">
+                            <button type="submit" class="btn btn-success flex-grow-1">
+                                <i class="bi bi-check-circle me-2"></i>
+                                Submit Flight Plan
+                            </button>
+                            <a href="{{ url_for('atc.atc_manage_flight_plans') }}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i>
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Information Card -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <i class="bi bi-lightbulb"></i>
+                    Submission Guidelines
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0 text-secondary">
+                        <li class="mb-2">
+                            <strong class="text-radar-cyan">Callsign</strong> must follow ICAO format
+                        </li>
+                        <li class="mb-2">
+                            <strong class="text-radar-cyan">Flight Plan</strong> will be validated against ICAO standards
+                        </li>
+                        <li class="mb-2">
+                            <strong class="text-radar-cyan">Parser</strong> will extract: Aircraft Type, Departure, Destination, FIR Entry, Speed
+                        </li>
+                        <li class="mb-0">
+                            <strong class="text-radar-cyan">Duplicates</strong> can be replaced if no active tracks exist
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

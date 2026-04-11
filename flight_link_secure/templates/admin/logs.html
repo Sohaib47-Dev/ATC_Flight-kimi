@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+
+{% block title %}System Logs - Flight-Link Secure{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-journal-text text-radar-blue"></i> System Logs</h2>
+            <p class="text-secondary mb-0">View and filter system activity and audit logs</p>
+        </div>
+        <a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Filter Card -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-funnel"></i> Filter Logs
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label for="filterUser" class="form-label">
+                        <i class="bi bi-person"></i> User
+                    </label>
+                    <input type="text" class="form-control" id="filterUser"
+                           placeholder="Enter username..." onkeyup="filterLogs()">
+                </div>
+                <div class="col-md-3">
+                    <label for="filterAction" class="form-label">
+                        <i class="bi bi-lightning"></i> Action Type
+                    </label>
+                    <select class="form-select" id="filterAction" onchange="filterLogs()">
+                        <option value="">All Actions</option>
+                        <option value="LOGIN">Login</option>
+                        <option value="LOGOUT">Logout</option>
+                        <option value="FLIGHT_PLAN_ADDED">Flight Plan Added</option>
+                        <option value="FLIGHT_PLAN_REPLACED">Flight Plan Replaced</option>
+                        <option value="FLIGHT_PLAN_DELETED">Flight Plan Deleted</option>
+                        <option value="TRACK_CREATED">Track Created</option>
+                        <option value="DATA_TRANSFERRED">Data Transferred</option>
+                        <option value="USER_ACTIVATED">User Activated</option>
+                        <option value="USER_DEACTIVATED">User Deactivated</option>
+                        <option value="PASSWORD_RESET">Password Reset</option>
+                        <option value="USER_UPDATED">User Updated</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="filterDate" class="form-label">
+                        <i class="bi bi-calendar"></i> Date
+                    </label>
+                    <input type="date" class="form-control" id="filterDate" onchange="filterLogs()">
+                </div>
+                <div class="col-md-3">
+                    <label for="filterIP" class="form-label">
+                        <i class="bi bi-globe"></i> IP Address
+                    </label>
+                    <input type="text" class="form-control" id="filterIP"
+                           placeholder="Enter IP..." onkeyup="filterLogs()">
+                </div>
+            </div>
+            <div class="mt-3">
+                <button class="btn btn-secondary" onclick="clearFilters()">
+                    <i class="bi bi-x-circle"></i> Clear All Filters
+                </button>
+                <span id="logCount" class="ms-3 text-secondary"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-clock-history"></i> System Activity Logs (Last 100 entries)
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 table-sm" id="logsTable">
+                    <thead>
+                        <tr>
+                            <th><i class="bi bi-hash"></i> ID</th>
+                            <th><i class="bi bi-calendar"></i> Timestamp</th>
+                            <th><i class="bi bi-person"></i> User</th>
+                            <th><i class="bi bi-lightning"></i> Action</th>
+                            <th><i class="bi bi-info-circle"></i> Details</th>
+                            <th><i class="bi bi-globe"></i> IP Address</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                        <tr data-user="{{ log.username or 'System' }}"
+                            data-action="{{ log.action }}"
+                            data-date="{{ log.timestamp.strftime('%Y-%m-%d') }}"
+                            data-ip="{{ log.ip_address or '' }}">
+                            <td><code class="text-radar-cyan" style="font-size: 0.8rem;">{{ log.id }}</code></td>
+                            <td class="text-nowrap">
+                                <code class="text-radar-blue" style="font-size: 0.8rem;">{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</code>
+                            </td>
+                            <td>
+                                {% if log.username %}
+                                    <span class="badge badge-primary" style="font-size: 0.7rem;">{{ log.username }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary" style="font-size: 0.7rem;"><i class="bi bi-gear-fill"></i> System</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if 'LOGIN' in log.action %}
+                                    <span class="badge badge-success" style="font-size: 0.7rem;">{{ log.action }}</span>
+                                {% elif 'LOGOUT' in log.action %}
+                                    <span class="badge bg-secondary" style="font-size: 0.7rem;">{{ log.action }}</span>
+                                {% elif 'DELETED' in log.action or 'TERMINATED' in log.action %}
+                                    <span class="badge badge-danger" style="font-size: 0.7rem;">{{ log.action }}</span>
+                                {% elif 'CREATED' in log.action or 'ADDED' in log.action %}
+                                    <span class="badge badge-success" style="font-size: 0.7rem;">{{ log.action }}</span>
+                                {% elif 'TRANSFERRED' in log.action %}
+                                    <span class="badge badge-info" style="font-size: 0.7rem;">{{ log.action }}</span>
+                                {% elif 'FAILED' in log.action or 'BLOCKED' in log.action %}
+                                    <span class="badge badge-warning" style="font-size: 0.7rem;">{{ log.action }}</span>
+                                {% else %}
+                                    <span class="badge badge-primary" style="font-size: 0.7rem;">{{ log.action }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if log.details %}
+                                    <small class="text-secondary" style="font-size: 0.75rem;">{{ log.details }}</small>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td><code class="text-radar-amber" style="font-size: 0.8rem;">{{ log.ip_address or 'N/A' }}</code></td>
+                        </tr>
+                        {% else %}
+                        <tr id="noLogs">
+                            <td colspan="6" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                                <strong>No logs found</strong><br>
+                                <small>System logs will appear here as activities occur</small>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer text-muted">
+            <i class="bi bi-info-circle"></i> Showing last 100 log entries. Logs are automatically indexed by timestamp for efficient querying.
+        </div>
+    </div>
+</div>
+
+<script>
+function filterLogs() {
+    const filterUser = document.getElementById('filterUser').value.toUpperCase();
+    const filterAction = document.getElementById('filterAction').value.toUpperCase();
+    const filterDate = document.getElementById('filterDate').value;
+    const filterIP = document.getElementById('filterIP').value;
+
+    const table = document.getElementById('logsTable');
+    const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+
+    let visibleCount = 0;
+
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.id === 'noLogs') continue;
+
+        const user = (row.getAttribute('data-user') || '').toUpperCase();
+        const action = (row.getAttribute('data-action') || '').toUpperCase();
+        const date = row.getAttribute('data-date') || '';
+        const ip = row.getAttribute('data-ip') || '';
+
+        let showRow = true;
+
+        if (filterUser && !user.includes(filterUser)) {
+            showRow = false;
+        }
+
+        if (filterAction && action !== filterAction) {
+            showRow = false;
+        }
+
+        if (filterDate && date !== filterDate) {
+            showRow = false;
+        }
+
+        if (filterIP && !ip.includes(filterIP)) {
+            showRow = false;
+        }
+
+        row.style.display = showRow ? '' : 'none';
+        if (showRow) visibleCount++;
+    }
+
+    document.getElementById('logCount').textContent = `Showing ${visibleCount} log(s)`;
+}
+
+function clearFilters() {
+    document.getElementById('filterUser').value = '';
+    document.getElementById('filterAction').value = '';
+    document.getElementById('filterDate').value = '';
+    document.getElementById('filterIP').value = '';
+    filterLogs();
+}
+
+// Initialize count on page load
+document.addEventListener('DOMContentLoaded', function() {
+    filterLogs();
+});
+</script>
+{% endblock %}

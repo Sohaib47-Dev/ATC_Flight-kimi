@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Flight Plans - Flight-Link Secure{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="text-radar-cyan fw-bold">
+                        <i class="bi bi-list-ul me-3"></i>Manage Flight Plans
+                    </h1>
+                    <p class="text-secondary">View and delete flight plans from the database</p>
+                </div>
+                <a href="{{ url_for('atc.atc_add_flight_plan') }}" class="btn btn-success">
+                    <i class="bi bi-plus-circle me-2"></i>
+                    Add New Plan
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {% if flight_plans %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-database"></i>
+                    Flight Plans Database ({{ flight_plans|length }} plans)
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Callsign</th>
+                                    <th>Created At</th>
+                                    <th>Status</th>
+                                    <th class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for plan in flight_plans %}
+                                <tr style="cursor: pointer;" onclick="openViewModal({{ plan.id }})" title="Click to view flight plan details">
+                                    <td>
+                                        <span class="badge badge-primary">#{{ plan.id }}</span>
+                                    </td>
+                                    <td>
+                                        <strong class="text-radar-cyan">{{ plan.callsign }}</strong>
+                                    </td>
+                                    <td class="text-secondary">
+                                        <i class="bi bi-clock me-1"></i>
+                                        {{ plan.created_at.strftime('%Y-%m-%d %H:%M UTC') }}
+                                    </td>
+                                    <td>
+                                        {% if plans_with_tracks.get(plan.id) %}
+                                            <span class="badge badge-warning">
+                                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                                Has Active Tracks
+                                            </span>
+                                        {% else %}
+                                            <span class="badge badge-success">
+                                                <i class="bi bi-check-circle me-1"></i>
+                                                Available
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center" onclick="event.stopPropagation()">
+                                        {% if not plans_with_tracks.get(plan.id) %}
+                                        <button type="button"
+                                                class="btn btn-sm btn-danger"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#deleteModal{{ plan.id }}">
+                                            <i class="bi bi-trash"></i>
+                                            Delete
+                                        </button>
+                                        {% else %}
+                                        <button type="button"
+                                                class="btn btn-sm btn-warning"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#deleteModal{{ plan.id }}"
+                                                title="Has active tracks - termination required">
+                                            <i class="bi bi-exclamation-triangle"></i>
+                                            Remove
+                                        </button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals (outside table) -->
+    {% for plan in flight_plans %}
+    <!-- View Modal -->
+    <div class="modal fade" id="viewModal{{ plan.id }}" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content bg-card-dark border-secondary">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-radar-cyan">
+                        <i class="bi bi-file-earmark-text me-2"></i>
+                        Flight Plan: {{ plan.callsign }}
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <strong class="text-primary">Plan ID:</strong>
+                        <span class="text-secondary">#{{ plan.id }}</span>
+                    </div>
+                    <div class="mb-3">
+                        <strong class="text-primary">Callsign:</strong>
+                        <span class="text-radar-cyan">{{ plan.callsign }}</span>
+                    </div>
+                    <div class="mb-3">
+                        <strong class="text-primary">Created:</strong>
+                        <span class="text-secondary">{{ plan.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</span>
+                    </div>
+                    <div class="mb-3">
+                        <strong class="text-primary">Raw Flight Plan:</strong>
+                        <div class="flight-plan-display mt-2">{{ plan.raw_flight_plan }}</div>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i>
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Modal -->
+    <div class="modal fade" id="deleteModal{{ plan.id }}" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content bg-card-dark border-danger">
+                <div class="modal-header border-danger">
+                    <h5 class="modal-title text-radar-red">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Confirm Deletion
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    {% if plans_with_tracks.get(plan.id) %}
+                    <!-- Has Active Tracks -->
+                    <div class="alert alert-danger mb-3">
+                        <i class="bi bi-exclamation-octagon me-2"></i>
+                        <strong>WARNING: This flight plan has active tracks!</strong>
+                    </div>
+                    <p class="text-secondary mb-3">
+                        Flight plan <strong class="text-radar-cyan">{{ plan.callsign }}</strong> has active tracks in the system.
+                    </p>
+                    <p class="text-radar-red mb-3">
+                        <strong>Do you want to terminate all active tracks and delete the flight plan?</strong>
+                    </p>
+                    <p class="text-muted small mb-3">
+                        This will mark all active tracks as "terminated" and remove the flight plan from the database permanently.
+                    </p>
+                    <!-- Termination Form -->
+                    <form method="POST" action="{{ url_for('atc.atc_delete_flight_plan', plan_id=plan.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="terminate_tracks" value="true">
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-X-octagon me-2"></i>
+                                Yes, Terminate Tracks & Delete Plan
+                            </button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                <i class="bi bi-x-circle"></i>
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <!-- No Active Tracks -->
+                    <p class="text-secondary mb-3">
+                        Are you sure you want to delete this flight plan?
+                    </p>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-circle me-2"></i>
+                        <strong>Callsign:</strong> {{ plan.callsign }}<br>
+                        <strong>ID:</strong> #{{ plan.id }}
+                    </div>
+                    <p class="text-radar-red mb-0">
+                        <strong>Warning:</strong> This action cannot be undone.
+                    </p>
+                </div>
+                <div class="modal-footer border-danger">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i>
+                        Cancel
+                    </button>
+                    <form method="POST" action="{{ url_for('atc.atc_delete_flight_plan', plan_id=plan.id) }}" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-trash"></i>
+                            Delete Permanently
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="bi bi-inbox display-1 text-muted mb-3"></i>
+                    <h3 class="text-secondary">No Flight Plans Found</h3>
+                    <p class="text-muted mb-4">There are currently no flight plans in the database.</p>
+                    <a href="{{ url_for('atc.atc_add_flight_plan') }}" class="btn btn-success">
+                        <i class="bi bi-plus-circle me-2"></i>
+                        Add Your First Flight Plan
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .modal-content {
+        border-radius: 16px;
+    }
+
+    .modal-header, .modal-footer {
+        background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(0, 168, 204, 0.05) 100%);
+    }
+
+    .btn-close {
+        filter: brightness(0) invert(1);
+        opacity: 0.8;
+    }
+
+    .btn-close:hover {
+        opacity: 1;
+    }
+</style>
+
+<script>
+function openViewModal(planId) {
+    // Open the view modal for the specified flight plan
+    const modal = new bootstrap.Modal(document.getElementById('viewModal' + planId));
+    modal.show();
+}
+</script>
+{% endblock %}

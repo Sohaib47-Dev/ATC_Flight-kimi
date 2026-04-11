@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+
+{% block title %}Data Integrity - Flight-Link Secure{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-shield-exclamation text-radar-amber"></i> Data Integrity Controls</h2>
+            <p class="text-secondary mb-0">Detection and resolution of data inconsistencies</p>
+        </div>
+        <a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-3 col-md-6">
+            <div class="card border-{% if duplicate_plans %}danger{% else %}success{% endif %}" style="border-width: 2px;">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 {% if duplicate_plans %}text-radar-red{% else %}text-radar-green{% endif %}">
+                        {{ duplicate_plans|length }}
+                    </h3>
+                    <small class="text-secondary">Duplicate Callsigns</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card border-{% if ssr_conflict_tracks %}danger{% else %}success{% endif %}" style="border-width: 2px;">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 {% if ssr_conflict_tracks %}text-radar-red{% else %}text-radar-green{% endif %}">
+                        {{ ssr_conflict_tracks|length }}
+                    </h3>
+                    <small class="text-secondary">SSR Conflicts</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card border-{% if orphaned_tracks %}warning{% else %}success{% endif %}" style="border-width: 2px;">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 {% if orphaned_tracks %}text-radar-amber{% else %}text-radar-green{% endif %}">
+                        {{ orphaned_tracks|length }}
+                    </h3>
+                    <small class="text-secondary">Orphaned Tracks</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card border-{% if problematic_plans %}danger{% else %}success{% endif %}" style="border-width: 2px;">
+                <div class="card-body text-center">
+                    <h3 class="mb-0 {% if problematic_plans %}text-radar-red{% else %}text-radar-green{% endif %}">
+                        {{ problematic_plans|length }}
+                    </h3>
+                    <small class="text-secondary">Parsing Errors</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Duplicate Callsigns -->
+    <div class="card mb-4">
+        <div class="card-header bg-danger bg-opacity-10 border-danger">
+            <i class="bi bi-exclamation-triangle-fill text-danger"></i> Duplicate Flight Plan Callsigns
+        </div>
+        <div class="card-body">
+            {% if duplicate_plans %}
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-octagon me-2"></i>
+                <strong>Warning:</strong> {{ duplicate_plans|length }} callsign(s) have multiple flight plans in the database.
+            </div>
+            {% for dup in duplicate_plans %}
+            <div class="card mb-3 border-danger">
+                <div class="card-header bg-danger bg-opacity-10">
+                    <strong class="text-danger">Callsign: {{ dup.callsign }}</strong>
+                    <span class="badge bg-danger ms-2">{{ dup.count }} Duplicates</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Created At</th>
+                                    <th>Preview</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for plan in dup.plans %}
+                                <tr>
+                                    <td><code>{{ plan.id }}</code></td>
+                                    <td><small>{{ plan.created_at.strftime('%Y-%m-%d %H:%M') }}</small></td>
+                                    <td><small class="font-monospace">{{ plan.raw_flight_plan[:50] }}...</small></td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-danger"
+                                                onclick="deletePlan({{ plan.id }}, '{{ plan.callsign }}')">
+                                            <i class="bi bi-trash"></i> Delete
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle-fill me-2"></i> No duplicate callsigns detected.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- SSR Conflicts -->
+    <div class="card mb-4">
+        <div class="card-header bg-danger bg-opacity-10 border-danger">
+            <i class="bi bi-broadcast text-danger"></i> SSR Code Conflicts
+        </div>
+        <div class="card-body">
+            {% if ssr_conflict_tracks %}
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-octagon me-2"></i>
+                <strong>Critical:</strong> {{ ssr_conflict_tracks|length }} SSR code(s) are assigned to multiple active tracks.
+            </div>
+            {% for conflict in ssr_conflict_tracks %}
+            <div class="card mb-3 border-danger">
+                <div class="card-header bg-danger bg-opacity-10">
+                    <strong class="text-danger">SSR: {{ conflict.ssr }}</strong>
+                    <span class="badge bg-danger ms-2">{{ conflict.count }} Active Tracks</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Track ID</th>
+                                    <th>Callsign</th>
+                                    <th>Aircraft</th>
+                                    <th>Route</th>
+                                    <th>Created At</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for track in conflict.tracks %}
+                                <tr>
+                                    <td><code>{{ track.id }}</code></td>
+                                    <td><strong class="text-radar-cyan">{{ track.callsign }}</strong></td>
+                                    <td>{{ track.aircraft_type }}</td>
+                                    <td><small>{{ track.departure }} → {{ track.destination }}</small></td>
+                                    <td><small>{{ track.created_at.strftime('%Y-%m-%d %H:%M') }}</small></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-muted small mb-0">
+                        <i class="bi bi-info-circle"></i> Contact ATC operators to resolve SSR conflicts. SSR codes must be unique for active tracks.
+                    </p>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle-fill me-2"></i> No SSR conflicts detected.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Orphaned Tracks -->
+    <div class="card mb-4">
+        <div class="card-header bg-warning bg-opacity-10 border-warning">
+            <i class="bi bi-exclamation-triangle text-warning"></i> Orphaned Tracks
+        </div>
+        <div class="card-body">
+            {% if orphaned_tracks %}
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Notice:</strong> {{ orphaned_tracks|length }} track(s) exist without corresponding flight plans.
+            </div>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Track ID</th>
+                            <th>Callsign</th>
+                            <th>Aircraft</th>
+                            <th>Status</th>
+                            <th>Created At</th>
+                            <th>Missing FP ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for track in orphaned_tracks %}
+                        <tr>
+                            <td><code>{{ track.id }}</code></td>
+                            <td><strong class="text-radar-cyan">{{ track.callsign }}</strong></td>
+                            <td>{{ track.aircraft_type }}</td>
+                            <td><span class="badge bg-secondary">{{ track.status }}</span></td>
+                            <td><small>{{ track.created_at.strftime('%Y-%m-%d %H:%M') }}</small></td>
+                            <td><code class="text-danger">{{ track.flight_plan_id }}</code></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle-fill me-2"></i> No orphaned tracks detected.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Parsing Errors -->
+    <div class="card mb-4">
+        <div class="card-header bg-danger bg-opacity-10 border-danger">
+            <i class="bi bi-bug-fill text-danger"></i> Flight Plans with Parsing Errors
+        </div>
+        <div class="card-body">
+            {% if problematic_plans %}
+            <div class="alert alert-danger">
+                <i class="bi bi-exclamation-octagon me-2"></i>
+                <strong>Error:</strong> {{ problematic_plans|length }} flight plan(s) have parsing/validation issues.
+            </div>
+            {% for item in problematic_plans %}
+            <div class="card mb-3 border-danger">
+                <div class="card-header bg-danger bg-opacity-10">
+                    <strong class="text-danger">Flight Plan #{{ item.plan.id }}</strong>
+                    <span class="badge bg-secondary ms-2">{{ item.plan.callsign }}</span>
+                </div>
+                <div class="card-body">
+                    <h6 class="text-danger"><i class="bi bi-x-circle"></i> Errors:</h6>
+                    <ul class="mb-3">
+                        {% for error in item.errors %}
+                        <li><code class="text-danger">{{ error }}</code></li>
+                        {% endfor %}
+                    </ul>
+                    <h6 class="text-secondary">Raw Flight Plan:</h6>
+                    <pre class="bg-dark text-light p-3 rounded" style="font-size: 0.85rem; max-height: 150px; overflow-y: auto;">{{ item.plan.raw_flight_plan }}</pre>
+                    <button type="button" class="btn btn-sm btn-danger mt-2"
+                            onclick="deletePlan({{ item.plan.id }}, '{{ item.plan.callsign }}')">
+                        <i class="bi bi-trash"></i> Delete Invalid Plan
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="alert alert-success">
+                <i class="bi bi-check-circle-fill me-2"></i> No parsing errors detected in recent flight plans.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function deletePlan(planId, callsign) {
+    if (!confirm(`Are you sure you want to delete flight plan "${callsign}" (ID: ${planId})?`)) {
+        return;
+    }
+
+    fetch(`/admin/flight-plans/${planId}/delete`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Flight plan deleted successfully');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Error deleting flight plan');
+        console.error(error);
+    });
+}
+</script>
+{% endblock %}

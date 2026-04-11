@@ -1,0 +1,9 @@
+# Ignore Python virtual environment
+venv/
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore temporary Claude AI files
+tmpclaude-*

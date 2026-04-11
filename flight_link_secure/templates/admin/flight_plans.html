@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+
+{% block title %}Flight Plans - Flight-Link Secure{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-file-earmark-text-fill text-radar-blue"></i> Flight Plans</h2>
+            <p class="text-secondary mb-0">View and manage all flight plans in the database</p>
+        </div>
+        <a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Search and Filter -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="bi bi-search"></i> Search & Filter
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="searchCallsign" class="form-label">
+                        <i class="bi bi-tag"></i> Callsign
+                    </label>
+                    <input type="text" class="form-control" id="searchCallsign"
+                           placeholder="Enter callsign..." onkeyup="filterTable()">
+                </div>
+                <div class="col-md-4">
+                   <label for="searchId" class="form-label">
+                        <i class="bi bi-hash"></i> Flight Plan ID
+                    </label>
+                    <input type="number" class="form-control" id="searchId"
+                           placeholder="Enter ID..." onkeyup="filterTable()">
+                </div>
+                <div class="col-md-4">
+                    <label for="searchDate" class="form-label">
+                        <i class="bi bi-calendar"></i> Date
+                    </label>
+                    <input type="date" class="form-control" id="searchDate" onchange="filterTable()">
+                </div>
+            </div>
+            <div class="mt-3">
+                <button class="btn btn-secondary" onclick="clearFilters()">
+                    <i class="bi bi-x-circle"></i> Clear Filters
+                </button>
+                <span id="resultCount" class="ms-3 text-secondary"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-list-check"></i> All Stored Flight Plans
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0" id="flightPlansTable">
+                    <thead>
+                        <tr>
+                            <th><i class="bi bi-hash"></i> ID</th>
+                            <th><i class="bi bi-tag"></i> Callsign</th>
+                            <th><i class="bi bi-file-text"></i> Raw Flight Plan</th>
+                            <th><i class="bi bi-calendar"></i> Created At</th>
+                            <th class="text-center"><i class="bi bi-gear"></i> Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for fp in flight_plans %}
+                        <tr data-id="{{ fp.id }}" data-callsign="{{ fp.callsign }}" data-date="{{ fp.created_at.strftime('%Y-%m-%d') }}">
+                            <td><code class="text-radar-cyan">{{ fp.id }}</code></td>
+                            <td><span class="badge badge-primary fs-6">{{ fp.callsign }}</span></td>
+                            <td>
+                                <code class="small text-secondary">{{ fp.raw_flight_plan[:100] }}{% if fp.raw_flight_plan|length > 100 %}...{% endif %}</code>
+                            </td>
+                            <td class="text-nowrap"><small class="text-secondary">{{ fp.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</small></td>
+                            <td class="text-center">
+                                <div class="btn-group" role="group">
+                                    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#fpModal{{ fp.id }}" title="View Details">
+                                        <i class="bi bi-eye-fill"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-danger" onclick="deletePlan({{ fp.id }}, '{{ fp.callsign }}')" title="Delete">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr id="noResults">
+                            <td colspan="5" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                                <strong>No flight plans found</strong><br>
+                                <small>Flight plans will appear here when added to the database</small>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals (outside table) -->
+    {% for fp in flight_plans %}
+    <div class="modal fade" id="fpModal{{ fp.id }}" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content bg-card-dark border-secondary">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-radar-cyan">
+                        <i class="bi bi-file-earmark-text-fill"></i> Flight Plan: {{ fp.callsign }}
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <strong class="text-primary">Plan ID:</strong>
+                        <span class="text-secondary">#{{ fp.id }}</span>
+                    </div>
+                    <div class="mb-3">
+                        <strong class="text-primary">Callsign:</strong>
+                        <span class="badge badge-primary">{{ fp.callsign }}</span>
+                    </div>
+                    <div class="mb-3">
+                        <strong class="text-primary">Created:</strong>
+                        <span class="text-secondary">{{ fp.created_at.strftime('%Y-%m-%d %H:%M:%S UTC') }}</span>
+                    </div>
+                    <div class="mb-3">
+                        <strong class="text-primary">Raw Flight Plan:</strong>
+                        <div class="flight-plan-display mt-2">{{ fp.raw_flight_plan }}</div>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-danger" onclick="deletePlan({{ fp.id }}, '{{ fp.callsign }}'); $('#fpModal{{ fp.id }}').modal('hide');">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle"></i> Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+function filterTable() {
+    const searchCallsign = document.getElementById('searchCallsign').value.toUpperCase();
+    const searchId = document.getElementById('searchId').value;
+    const searchDate = document.getElementById('searchDate').value;
+    const table = document.getElementById('flightPlansTable');
+    const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+
+    let visibleCount = 0;
+
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.id === 'noResults') continue;
+
+        const id = row.getAttribute('data-id') || '';
+        const callsign = row.getAttribute('data-callsign') || '';
+        const date = row.getAttribute('data-date') || '';
+
+        let showRow = true;
+
+        if (searchCallsign && !callsign.toUpperCase().includes(searchCallsign)) {
+            showRow = false;
+        }
+
+        if (searchId && !id.includes(searchId)) {
+            showRow = false;
+        }
+
+        if (searchDate && date !== searchDate) {
+            showRow = false;
+        }
+
+        row.style.display = showRow ? '' : 'none';
+        if (showRow) visibleCount++;
+    }
+
+    document.getElementById('resultCount').textContent = `Showing ${visibleCount} flight plan(s)`;
+}
+
+function clearFilters() {
+    document.getElementById('searchCallsign').value = '';
+    document.getElementById('searchId').value = '';
+    document.getElementById('searchDate').value = '';
+    filterTable();
+}
+
+function deletePlan(planId, callsign) {
+    if (!confirm(`Are you sure you want to delete flight plan "${callsign}" (ID: ${planId})?\n\nThis action cannot be undone.`)) {
+        return;
+    }
+
+    fetch(`/admin/flight-plans/${planId}/delete`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Flight plan deleted successfully');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Error deleting flight plan');
+        console.error(error);
+    });
+}
+
+// Initialize result count on page load
+document.addEventListener('DOMContentLoaded', function() {
+    filterTable();
+});
+</script>
+
+<style>
+.modal-content {
+    border-radius: 16px;
+}
+
+.modal-header, .modal-footer {
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(0, 168, 204, 0.05) 100%);
+}
+
+.btn-close {
+    filter: brightness(0) invert(1);
+    opacity: 0.8;
+}
+
+.btn-close:hover {
+    opacity: 1;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome - Flight-Link Secure{% endblock %}
+
+{% block extra_css %}
+<style>
+    body {
+        background: linear-gradient(135deg, var(--radar-darker) 0%, var(--radar-dark) 50%, #0d1524 100%);
+        position: relative;
+        overflow-x: hidden;
+    }
+
+    body::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background:
+            radial-gradient(circle at 20% 50%, rgba(0, 212, 255, 0.1) 0%, transparent 50%),
+            radial-gradient(circle at 80% 80%, rgba(0, 255, 136, 0.1) 0%, transparent 50%);
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    .landing-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        position: relative;
+        z-index: 1;
+    }
+
+    .landing-card {
+        background: linear-gradient(135deg, var(--card-dark) 0%, rgba(30, 36, 51, 0.95) 100%);
+        border: 1px solid var(--card-border);
+        border-radius: 24px;
+        padding: 3rem;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        width: 100%;
+        max-width: 600px;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .landing-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--radar-blue) 0%, var(--radar-cyan) 50%, var(--radar-green) 100%);
+    }
+
+    .landing-logo {
+        text-align: center;
+        margin-bottom: 2rem;
+        animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
+    }
+
+    .landing-logo i {
+        font-size: 5rem;
+        background: linear-gradient(135deg, var(--radar-blue) 0%, var(--radar-cyan) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        filter: drop-shadow(0 0 30px rgba(0, 212, 255, 0.5));
+    }
+
+    .landing-title {
+        text-align: center;
+        color: var(--text-primary);
+        margin-bottom: 0.5rem;
+        font-weight: 800;
+        font-size: 2.5rem;
+        letter-spacing: -1px;
+    }
+
+    .landing-subtitle {
+        text-align: center;
+        color: var(--text-secondary);
+        margin-bottom: 2.5rem;
+        font-size: 1.1rem;
+        line-height: 1.6;
+    }
+
+    .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+        margin: 2.5rem 0;
+    }
+
+    .feature-item {
+        text-align: center;
+        padding: 1.5rem;
+        background: rgba(30, 36, 51, 0.6);
+        border: 1px solid var(--card-border);
+        border-radius: 12px;
+        transition: all 0.3s ease;
+    }
+
+    .feature-item:hover {
+        transform: translateY(-5px);
+        border-color: var(--radar-blue);
+        box-shadow: 0 8px 24px rgba(0, 212, 255, 0.3);
+    }
+
+    .feature-item i {
+        font-size: 2.5rem;
+        display: block;
+        margin-bottom: 1rem;
+    }
+
+    .feature-item.feature-green i { color: var(--radar-green); }
+    .feature-item.feature-blue i { color: var(--radar-blue); }
+    .feature-item.feature-cyan i { color: var(--radar-cyan); }
+
+    .feature-item p {
+        font-size: 0.9rem;
+        color: var(--text-secondary);
+        margin: 0;
+    }
+
+    .credentials-box {
+        background: linear-gradient(135deg, rgba(0, 212, 255, 0.15) 0%, rgba(0, 168, 204, 0.1) 100%);
+        border: 1px solid var(--radar-blue);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-top: 2rem;
+    }
+
+    .credentials-title {
+        color: var(--radar-cyan);
+        font-weight: 700;
+        font-size: 1rem;
+        margin-bottom: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .credential-item {
+        background: rgba(30, 36, 51, 0.8);
+        border-left: 3px solid;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+
+    .credential-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .credential-item:hover {
+        transform: translateX(5px);
+    }
+
+    .credential-item.cred-admin {
+        border-color: var(--radar-red);
+    }
+
+    .credential-item.cred-atc {
+        border-color: var(--radar-blue);
+    }
+
+    .credential-item.cred-defense {
+        border-color: var(--radar-green);
+    }
+
+    .credential-item strong {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.25rem;
+    }
+
+    .credential-item.cred-admin strong { color: var(--radar-red); }
+    .credential-item.cred-atc strong { color: var(--radar-blue); }
+    .credential-item.cred-defense strong { color: var(--radar-green); }
+
+    .credential-item code {
+        background: rgba(0, 0, 0, 0.3);
+        padding: 0.25rem 0.75rem;
+        border-radius: 6px;
+        font-size: 0.95rem;
+        color: var(--radar-cyan);
+    }
+
+    @media (max-width: 768px) {
+        .feature-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="landing-container">
+    <div class="landing-card">
+        <div class="landing-logo">
+            <i class="bi bi-radar"></i>
+        </div>
+        <h1 class="landing-title">Flight-Link Secure</h1>
+        <p class="landing-subtitle">
+            ATC-Defense Flight Plan Processing<br>& Radar Simulation System
+        </p>
+
+        <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-lg w-100 mb-3">
+            <i class="bi bi-box-arrow-in-right"></i> Login to System
+        </a>
+
+        <div class="feature-grid">
+            <div class="feature-item feature-green">
+                <i class="bi bi-shield-fill-check"></i>
+                <p><strong>Secure</strong><br>Transfer</p>
+            </div>
+            <div class="feature-item feature-blue">
+                <i class="bi bi-radar"></i>
+                <p><strong>Radar</strong><br>Simulation</p>
+            </div>
+            <div class="feature-item feature-cyan">
+                <i class="bi bi-file-earmark-text-fill"></i>
+                <p><strong>ICAO</strong><br>Parser</p>
+            </div>
+        </div>
+
+        <div class="credentials-box">
+            <h6 class="credentials-title">
+                <i class="bi bi-info-circle-fill"></i> Demo Credentials
+            </h6>
+            <div class="credential-item cred-admin">
+                <strong><i class="bi bi-shield-fill-exclamation"></i> Administrator</strong>
+                <code>admin / admin123</code>
+            </div>
+            <div class="credential-item cred-atc">
+                <strong><i class="bi bi-radar"></i> ATC Operator</strong>
+                <code>atc / atc123</code>
+            </div>
+            <div class="credential-item cred-defense">
+                <strong><i class="bi bi-shield-fill-check"></i> Defense Operator</strong>
+                <code>defense / defense123</code>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

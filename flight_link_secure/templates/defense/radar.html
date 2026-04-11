@@ -1,0 +1,773 @@
+{% extends "base.html" %}
+
+{% block title %}Radar Display - Flight-Link Secure{% endblock %}
+
+{% block extra_css %}
+<style>
+    .radar-container {
+        background: linear-gradient(135deg, var(--card-dark) 0%, rgba(10, 14, 26, 0.95) 100%);
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
+        padding: 0;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+
+    .radar-header {
+        background: linear-gradient(135deg, rgba(0, 212, 255, 0.15) 0%, rgba(0, 168, 204, 0.1) 100%);
+        border-bottom: 1px solid var(--card-border);
+        padding: 1.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .radar-title {
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .live-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0.5rem 1rem;
+        background: rgba(0, 255, 136, 0.15);
+        border: 1px solid var(--radar-green);
+        border-radius: 8px;
+        color: var(--radar-green);
+        font-weight: 600;
+        font-size: 0.9rem;
+        animation: live-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes live-pulse {
+        0%, 100% { box-shadow: 0 0 10px rgba(0, 255, 136, 0.3); }
+        50% { box-shadow: 0 0 20px rgba(0, 255, 136, 0.6); }
+    }
+
+    .live-dot {
+        width: 8px;
+        height: 8px;
+        background: var(--radar-green);
+        border-radius: 50%;
+        animation: blink 1.5s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+    }
+
+    .radar-stats {
+        display: flex;
+        gap: 2rem;
+    }
+
+    .radar-stat {
+        text-align: center;
+    }
+
+    .radar-stat-value {
+        font-size: 2rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, var(--radar-blue) 0%, var(--radar-cyan) 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        line-height: 1;
+    }
+
+    .radar-stat-label {
+        font-size: 0.7rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-top: 0.25rem;
+    }
+
+    .radar-screen {
+        width: 100%;
+        height: 650px;
+        background: radial-gradient(ellipse at center, rgba(10, 14, 26, 1) 0%, rgba(5, 8, 17, 1) 100%);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .radar-grid {
+        pointer-events: none;
+    }
+
+    #radarSvg {
+        filter: drop-shadow(0 0 10px rgba(0, 212, 255, 0.1));
+    }
+
+    .fir-boundary {
+        fill: rgba(0, 212, 255, 0.08);
+        stroke: var(--radar-cyan);
+        stroke-width: 2.5;
+        stroke-dasharray: 8, 4;
+        animation: fir-glow 3s ease-in-out infinite;
+    }
+
+    @keyframes fir-glow {
+        0%, 100% { stroke-opacity: 0.6; }
+        50% { stroke-opacity: 1; }
+    }
+
+    .fir-label {
+        fill: var(--radar-cyan);
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 2px;
+        text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+    }
+
+    .entry-point {
+        fill: var(--radar-amber);
+        stroke: var(--radar-amber);
+        stroke-width: 2;
+        filter: drop-shadow(0 0 6px var(--radar-amber));
+        animation: point-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes point-pulse {
+        0%, 100% { r: 5; opacity: 1; }
+        50% { r: 7; opacity: 0.7; }
+    }
+
+    .entry-label {
+        fill: var(--radar-amber);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+
+    .aircraft-symbol {
+        fill: var(--radar-red);
+        stroke: var(--radar-red);
+        stroke-width: 2;
+        filter: drop-shadow(0 0 8px var(--radar-red));
+        animation: aircraft-pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes aircraft-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+
+    .aircraft-label {
+        fill: var(--text-primary);
+        font-size: 11px;
+        font-family: 'Courier New', monospace;
+        font-weight: 600;
+        text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+    }
+
+    .aircraft-trail {
+        fill: none;
+        stroke: rgba(255, 51, 102, 0.4);
+        stroke-width: 2;
+        stroke-dasharray: 4, 4;
+    }
+
+    .radar-sweep {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 50%;
+        height: 3px;
+        background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.6), rgba(0, 212, 255, 0.8), transparent);
+        transform-origin: left center;
+        animation: sweep 4s linear infinite;
+        pointer-events: none;
+        filter: blur(2px);
+    }
+
+    @keyframes sweep {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    .radar-legend {
+        padding: 1.5rem;
+        background: rgba(18, 22, 31, 0.8);
+        border-top: 1px solid var(--card-border);
+        display: flex;
+        gap: 2rem;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .legend-color {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        box-shadow: 0 0 8px currentColor;
+    }
+
+    .legend-text {
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+
+    /* Aircraft Panel */
+    .aircraft-panel {
+        background: linear-gradient(135deg, var(--card-dark) 0%, rgba(30, 36, 51, 0.8) 100%);
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
+        padding: 1.5rem;
+        max-height: 700px;
+        overflow-y: auto;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .panel-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--card-border);
+    }
+
+    .panel-header h5 {
+        margin: 0;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .aircraft-card {
+        background: rgba(30, 36, 51, 0.6);
+        border: 1px solid var(--card-border);
+        border-left: 4px solid var(--radar-red);
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+    }
+
+    .aircraft-card:hover {
+        background: rgba(30, 36, 51, 0.9);
+        border-left-color: var(--radar-cyan);
+        transform: translateX(5px);
+    }
+
+    .aircraft-card .callsign {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--radar-cyan);
+        margin-bottom: 0.5rem;
+    }
+
+    .aircraft-card .info-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        margin-bottom: 0.3rem;
+    }
+
+    .aircraft-card .badge {
+        font-size: 0.75rem;
+        padding: 0.3rem 0.6rem;
+    }
+
+    /* Alert System */
+    .alert-container {
+        position: fixed;
+        top: 100px;
+        right: 30px;
+        z-index: 9999;
+        max-width: 400px;
+    }
+
+    .synthetic-alert {
+        background: linear-gradient(135deg, rgba(255, 51, 102, 0.95) 0%, rgba(204, 41, 82, 0.95) 100%);
+        border: 2px solid var(--radar-red);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 8px 32px rgba(255, 51, 102, 0.5);
+        animation: alert-slide-in 0.5s ease-out, alert-pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes alert-slide-in {
+        from {
+            transform: translateX(500px);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes alert-pulse {
+        0%, 100% { box-shadow: 0 8px 32px rgba(255, 51, 102, 0.5); }
+        50% { box-shadow: 0 8px 48px rgba(255, 51, 102, 0.8); }
+    }
+
+    .synthetic-alert .alert-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 1rem;
+    }
+
+    .synthetic-alert .alert-icon {
+        font-size: 2rem;
+        color: white;
+        animation: icon-flash 1s ease-in-out infinite;
+    }
+
+    @keyframes icon-flash {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .synthetic-alert .alert-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: white;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .synthetic-alert .alert-body {
+        color: white;
+        font-weight: 600;
+    }
+
+    .synthetic-alert .alert-dismiss {
+        background: white;
+        color: var(--radar-red);
+        border: none;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        font-weight: 700;
+        margin-top: 1rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .synthetic-alert .alert-dismiss:hover {
+        background: var(--text-primary);
+        transform: scale(1.05);
+    }
+
+    /* Sector Highlighting */
+    .sector-highlight {
+        opacity: 0;
+        transition: opacity 0.5s ease-in-out;
+    }
+
+    .sector-highlight.active {
+        opacity: 1;
+    }
+
+    /* Conflict Alert Styles */
+    .conflict-line {
+        animation: conflict-flash 0.8s ease-in-out infinite;
+    }
+
+    @keyframes conflict-flash {
+        0%, 100% { opacity: 0.8; }
+        50% { opacity: 0.3; }
+    }
+
+    .conflict-alert {
+        animation: conflict-text-pulse 1s ease-in-out infinite;
+        text-shadow: 0 0 10px var(--radar-red), 0 0 20px var(--radar-red);
+    }
+
+    @keyframes conflict-text-pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.7; transform: scale(1.1); }
+    }
+
+    /* Tooltip Styles */
+    .tooltip-trigger {
+        cursor: pointer;
+    }
+
+    .tooltip-trigger:hover {
+        opacity: 0.8;
+    }
+
+    /* Aircraft Group Hover Effect */
+    .aircraft-group:hover .aircraft-symbol {
+        filter: drop-shadow(0 0 15px var(--radar-red));
+    }
+
+    /* Flight Plan Display */
+    .flight-plan-display {
+        background: rgba(10, 14, 26, 0.95);
+        border: 1px solid var(--card-border);
+        border-radius: 8px;
+        padding: 1rem;
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="text-radar-cyan fw-bold">
+                        <i class="bi bi-radar me-3"></i>Radar Display
+                    </h1>
+                    <p class="text-secondary">Real-time aircraft tracking - Pakistan Flight Information Region</p>
+                </div>
+                <a href="{{ url_for('defense.defense_dashboard') }}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left me-2"></i>
+                    Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Radar Screen -->
+        <div class="col-lg-9">
+            <div class="radar-container">
+                <div class="radar-header">
+                    <div class="radar-title">
+                        <i class="bi bi-geo-alt-fill text-radar-cyan"></i>
+                        Pakistan FIR (OPKR)
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="radar-stats">
+                            <div class="radar-stat">
+                                <div class="radar-stat-value" id="activeAircraftCount">0</div>
+                                <div class="radar-stat-label">Active</div>
+                            </div>
+                            <div class="radar-stat">
+                                <div class="radar-stat-value" id="totalTracksCount">0</div>
+                                <div class="radar-stat-label">Total</div>
+                            </div>
+                        </div>
+                        <div class="live-indicator">
+                            <span class="live-dot"></span>
+                            LIVE
+                        </div>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Radar zoom">
+                            <button type="button" class="btn btn-outline-secondary" id="zoomOut" title="Zoom out">−</button>
+                            <button type="button" class="btn btn-outline-secondary" id="zoomIn" title="Zoom in">+</button>
+                        </div>
+                        <!-- TEMP dev: lat/lon picker (same as enableCoordinateDebugMode in radar.js) -->
+                        <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end" id="radarCoordDebugTools" title="Temporary developer tool — remove when FIR points are finalized">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="radarCoordDebugToggle" aria-pressed="false">Coord debug: off</button>
+                            <small class="text-secondary font-monospace" id="radarDebugCoordReadout" style="max-width: 22rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">—</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="radar-screen" id="radarZoomMap">
+                    <svg id="radarSvg" width="100%" height="100%" viewBox="0 0 900 650" preserveAspectRatio="xMidYMid meet">
+                        <!-- Grid Lines -->
+                        <defs>
+                            <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+                                <path d="M 50 0 L 0 0 0 50" fill="none" stroke="rgba(0, 212, 255, 0.1)" stroke-width="0.5"/>
+                            </pattern>
+                        </defs>
+                        <rect width="100%" height="100%" fill="url(#grid)"/>
+
+                        <!-- FIR Sectors Layer (rendered by radar.js) -->
+                        <g id="sectorsGroup"></g>
+
+                        <!-- Pakistan FIR Boundary (rendered by radar.js with real coordinates) -->
+                        <g id="firBoundary"></g>
+
+                        <!-- Entry Points (rendered by radar.js) -->
+                        <g id="entryPoints"></g>
+
+                        <!-- Conflict Lines Layer -->
+                        <g id="conflictGroup"></g>
+
+                        <!-- Aircraft Container -->
+                        <g id="aircraftContainer"></g>
+                    </svg>
+
+                    <!-- Radar Sweep Animation -->
+                    <div class="radar-sweep"></div>
+                </div>
+
+                <div class="radar-legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: rgba(0, 212, 255, 0.3); border: 2px dashed var(--radar-cyan);"></div>
+                        <span class="legend-text">Pakistan FIR Boundary</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: var(--radar-amber); border-radius: 50%;"></div>
+                        <span class="legend-text">FIR Entry Point</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: var(--radar-red); clip-path: polygon(50% 0%, 100% 100%, 0% 100%);"></div>
+                        <span class="legend-text">Active Aircraft</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Aircraft Panel -->
+        <div class="col-lg-3">
+            <div class="aircraft-panel">
+                <div class="panel-header">
+                    <i class="bi bi-airplane-engines-fill text-radar-blue" style="font-size: 1.5rem;"></i>
+                    <h5>Active Aircraft</h5>
+                </div>
+                <div id="aircraftList">
+                    <p class="text-muted text-center">Loading...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Alert Container -->
+<div class="alert-container" id="alertContainer"></div>
+
+<!-- Audio for alerts -->
+<audio id="alertSound" preload="auto">
+    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTKJ0/LRgC8G" type="audio/wav">
+</audio>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/radar.js') }}"></script>
+<script>
+let aircraftData = [];
+let previousAircraftIds = [];
+let processedAlerts = [];
+
+// Make playAlertSound globally accessible for radar.js
+window.playAlertSound = function() {
+    const audio = document.getElementById('alertSound');
+    audio.play().catch(e => console.log('Audio play failed:', e));
+};
+
+// Fetch and display alerts
+function checkNewAlerts() {
+    $.ajax({
+        url: '{{ url_for("defense.api_defense_new_alerts") }}',
+        method: 'GET',
+        success: function(alerts) {
+            alerts.forEach(function(alert) {
+                if (!processedAlerts.includes(alert.id)) {
+                    showSyntheticAlert(alert);
+                    processedAlerts.push(alert.id);
+                    playAlertSound();
+                }
+            });
+        }
+    });
+}
+
+// Show synthetic alert
+function showSyntheticAlert(alert) {
+    const alertHtml = `
+        <div class="synthetic-alert" id="alert-${alert.id}">
+            <div class="alert-header">
+                <i class="bi bi-exclamation-triangle-fill alert-icon"></i>
+                <div class="alert-title">NEW AIRCRAFT ENTERING FIR</div>
+            </div>
+            <div class="alert-body">
+                <div><strong>Callsign:</strong> ${alert.callsign}</div>
+                <div><strong>Entry Point:</strong> ${alert.fir_entry}</div>
+                <div><strong>Aircraft:</strong> ${alert.aircraft_type}</div>
+                <div><strong>Flight Level:</strong> FL${alert.cfl}</div>
+                <div><strong>SSR Code:</strong> ${alert.ssr}</div>
+            </div>
+            <button class="alert-dismiss" onclick="dismissAlert(${alert.id})">
+                <i class="bi bi-check2"></i> ACKNOWLEDGE
+            </button>
+        </div>
+    `;
+    $('#alertContainer').prepend(alertHtml);
+}
+
+// Dismiss alert
+function dismissAlert(alertId) {
+    $(`#alert-${alertId}`).fadeOut(300, function() {
+        $(this).remove();
+    });
+}
+
+// Play alert sound
+function playAlertSound() {
+    window.playAlertSound();
+}
+
+// Fetch active tracks
+function fetchActiveTracks() {
+    $.ajax({
+        url: '{{ url_for("defense.api_defense_tracks") }}',
+        method: 'GET',
+        success: function(response) {
+            aircraftData = response;
+
+            // Update radar engine with new data
+            window.radarEngine.updateAircraftData(response);
+
+            // Update aircraft list panel
+            updateAircraftList();
+
+            // Update statistics
+            updateStats();
+        }
+    });
+}
+
+// Update aircraft list panel
+function updateAircraftList() {
+    const list = $('#aircraftList');
+    list.empty();
+
+    if (aircraftData.length === 0) {
+        list.html('<div class="text-center text-muted py-5"><i class="bi bi-inbox display-4 d-block mb-3"></i><p>No active aircraft</p></div>');
+        return;
+    }
+
+    aircraftData.forEach(function(aircraft) {
+        const card = `
+            <div class="aircraft-card">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="callsign">${aircraft.callsign}</div>
+                    <span class="badge badge-primary">FL${aircraft.cfl}</span>
+                </div>
+                <div class="info-row">
+                    <i class="bi bi-airplane"></i>
+                    <span>${aircraft.aircraft_type}</span>
+                </div>
+                <div class="info-row">
+                    <i class="bi bi-geo-alt"></i>
+                    <span>${aircraft.departure} → ${aircraft.destination}</span>
+                </div>
+                <div class="info-row">
+                    <i class="bi bi-pin-map"></i>
+                    <span>Entry: ${aircraft.fir_entry}</span>
+                </div>
+                <div class="info-row">
+                    <i class="bi bi-broadcast"></i>
+                    <span>SSR: ${aircraft.ssr}</span>
+                </div>
+            </div>
+        `;
+        list.append(card);
+    });
+}
+
+// Update statistics
+function updateStats() {
+    $('#activeAircraftCount').text(aircraftData.length);
+    $('#totalTracksCount').text(aircraftData.length);
+}
+
+/**
+ * Zoom only the radar map surface (#radarZoomMap), not the whole page or header.
+ */
+function initRadarZoom() {
+    const radarContainer = document.getElementById('radarZoomMap');
+    const zoomInBtn = document.getElementById('zoomIn');
+    const zoomOutBtn = document.getElementById('zoomOut');
+    if (!radarContainer || !zoomInBtn || !zoomOutBtn) {
+        return;
+    }
+
+    let zoomLevel = 1;
+
+    function updateZoom() {
+        radarContainer.style.transform = 'scale(' + zoomLevel + ')';
+        radarContainer.style.transformOrigin = 'center center';
+    }
+
+    zoomInBtn.onclick = function () {
+        zoomLevel += 0.1;
+        zoomLevel = Math.max(0.5, Math.min(3, zoomLevel));
+        updateZoom();
+    };
+
+    zoomOutBtn.onclick = function () {
+        zoomLevel -= 0.1;
+        zoomLevel = Math.max(0.5, Math.min(3, zoomLevel));
+        updateZoom();
+    };
+
+    radarContainer.addEventListener(
+        'wheel',
+        function (e) {
+            e.preventDefault();
+            if (e.deltaY < 0) {
+                zoomLevel += 0.1;
+            } else {
+                zoomLevel -= 0.1;
+            }
+            zoomLevel = Math.max(0.5, Math.min(3, zoomLevel));
+            updateZoom();
+        },
+        { passive: false }
+    );
+
+    updateZoom();
+}
+
+// Initialize radar system
+$(document).ready(function() {
+    // Initialize the enhanced radar engine
+    const svgElement = document.getElementById('radarSvg');
+    window.radarEngine.init(svgElement);
+
+    initRadarZoom();
+
+    $('#radarCoordDebugToggle').on('click', function () {
+        const svg = document.getElementById('radarSvg');
+        const $btn = $(this);
+        if (!svg || typeof window.enableCoordinateDebugMode !== 'function') {
+            console.warn('Coordinate debug: radar SVG or enableCoordinateDebugMode missing.');
+            return;
+        }
+        if ($btn.attr('data-active') === '1') {
+            if (typeof window.disableCoordinateDebugMode === 'function') {
+                window.disableCoordinateDebugMode();
+            }
+            $btn.attr('data-active', '0').attr('aria-pressed', 'false').text('Coord debug: off');
+        } else {
+            window.enableCoordinateDebugMode(svg);
+            $btn.attr('data-active', '1').attr('aria-pressed', 'true').text('Coord debug: on — click map');
+            console.log('Coordinate debug enabled — click the radar map; watch console and the readout next to this button.');
+        }
+    });
+
+    // Fetch initial data
+    fetchActiveTracks();
+    checkNewAlerts();
+
+    // Set up periodic updates
+    setInterval(fetchActiveTracks, 5000);
+    setInterval(checkNewAlerts, 3000);
+});
+</script>
+{% endblock %}

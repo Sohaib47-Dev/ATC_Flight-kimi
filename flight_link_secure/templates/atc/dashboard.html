@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}ATC Dashboard - Flight-Link Secure{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1"><i class="bi bi-speedometer2 text-radar-blue"></i> ATC Dashboard</h2>
+            <p class="text-secondary mb-0">Air Traffic Control Operations Center</p>
+        </div>
+        <span class="badge badge-role-atc fs-6">ATC OPERATOR</span>
+    </div>
+
+    <!-- Recent Tracks -->
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-clock-history"></i> Your Recent Tracks
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th><i class="bi bi-hash"></i> Callsign</th>
+                            <th><i class="bi bi-airplane"></i> Aircraft</th>
+                            <th><i class="bi bi-signpost-2"></i> Route</th>
+                            <th><i class="bi bi-geo-alt"></i> FIR Entry</th>
+                            <th><i class="bi bi-clock"></i> ETO (PST)</th>
+                            <th><i class="bi bi-layers"></i> CFL</th>
+                            <th><i class="bi bi-broadcast"></i> SSR</th>
+                            <th><i class="bi bi-activity"></i> Status</th>
+                            <th><i class="bi bi-send"></i> Sent</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for track in recent_tracks %}
+                        <tr style="cursor: pointer;" onclick="viewFlightPlan('{{ track.callsign }}')" title="Click to view flight plan for {{ track.callsign }}">
+                            <td><span class="badge badge-primary">{{ track.callsign }}</span></td>
+                            <td><strong class="text-radar-cyan">{{ track.aircraft_type }}</strong></td>
+                            <td class="font-monospace small">{{ track.departure }} <i class="bi bi-arrow-right text-radar-blue"></i> {{ track.destination }}</td>
+                            <td><span class="badge badge-success">{{ track.fir_entry }}</span></td>
+                            <td><code class="text-radar-amber">{{ track.eto_pst[:2] }}:{{ track.eto_pst[2:] }}</code></td>
+                            <td><span class="badge bg-secondary">FL{{ track.cfl }}</span></td>
+                            <td><code class="text-radar-cyan">{{ track.ssr }}</code></td>
+                            <td>
+                                {% if track.status == 'active' %}
+                                    <span class="badge badge-success"><i class="bi bi-circle-fill"></i> Active</span>
+                                {% else %}
+                                    <span class="badge bg-secondary"><i class="bi bi-check-circle"></i> Completed</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if track.sent_to_defense %}
+                                    <i class="bi bi-check-circle-fill text-radar-green fs-5"></i>
+                                {% else %}
+                                    <i class="bi bi-x-circle-fill text-radar-amber fs-5"></i>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-5">
+                                <i class="bi bi-inbox fs-1 text-muted d-block mb-3"></i>
+                                <strong>No tracks created yet</strong><br>
+                                <small>Start by retrieving a flight plan from the database</small><br>
+                                <a href="{{ url_for('atc.atc_flight_plan') }}" class="btn btn-primary mt-3">
+                                    <i class="bi bi-plus-circle"></i> Create Your First Track
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function viewFlightPlan(callsign) {
+    // Create a form to POST the callsign to the flight plan page
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{{ url_for("atc.atc_flight_plan") }}';
+
+    // Add CSRF token
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrf_token';
+    csrfInput.value = '{{ csrf_token() }}';
+    form.appendChild(csrfInput);
+
+    // Add callsign
+    const callsignInput = document.createElement('input');
+    callsignInput.type = 'hidden';
+    callsignInput.name = 'callsign';
+    callsignInput.value = callsign;
+    form.appendChild(callsignInput);
+
+    // Submit the form
+    document.body.appendChild(form);
+    form.submit();
+}
+</script>
+{% endblock %}
