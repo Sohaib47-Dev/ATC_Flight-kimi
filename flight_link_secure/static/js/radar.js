@@ -2340,6 +2340,20 @@ const CORRECTED_ENTRY_POINTS = {
     LAJAK: { lat: 34.02176881269975, lon: 70.2027976989746 },
 };
 
+/**
+ * Display-only FIR reference markers (not used for aircraft routing).
+ */
+const FIR_REFERENCE_MARKERS = [
+    { code: 'RK', lat: 32.734191436767574, lon: 70.79595642089843 },
+    { code: 'DI', lat: 30.938411282626067, lon: 71.2481616973877 },
+    { code: 'MT', lat: 29.6065625, lon: 71.60624961853027 },
+    { code: 'FA', lat: 32.313229300759055, lon: 74.31875 },
+    { code: 'SD', lat: 34.861713881059124, lon: 74.54375 },
+    { code: 'KC', lat: 26.298984929865057, lon: 66.13169593811035 },
+    { code: 'SK', lat: 26.999563487659803, lon: 68.00669651031494 },
+    { code: 'Zohar', lat: 29.052161005193536, lon: 67.08258895874023 },
+];
+
 function normalizeFirEntryKeyForCoords(firKey) {
     if (firKey == null || firKey === '') return firKey;
     const k = String(firKey).trim().toUpperCase();
@@ -3003,6 +3017,35 @@ class RadarRenderer {
             entryGroup.appendChild(label);
         });
     }
+
+    /**
+     * Render display-only FIR reference waypoints (cyan); does not affect track logic.
+     */
+    renderReferenceMarkers() {
+        const group = document.getElementById('firReferenceMarkers');
+        if (!group) return;
+
+        group.innerHTML = '';
+
+        FIR_REFERENCE_MARKERS.forEach((m) => {
+            const pos = geoToSVG(m.lat, m.lon);
+
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('class', 'fir-reference-point');
+            circle.setAttribute('cx', pos.x);
+            circle.setAttribute('cy', pos.y);
+            circle.setAttribute('r', '5');
+            group.appendChild(circle);
+
+            const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            label.setAttribute('class', 'fir-reference-label');
+            label.setAttribute('x', pos.x);
+            label.setAttribute('y', pos.y - 10);
+            label.setAttribute('text-anchor', 'middle');
+            label.textContent = m.code;
+            group.appendChild(label);
+        });
+    }
 }
 
 // ===================================================================
@@ -3025,6 +3068,7 @@ class RadarEngine {
         this.renderer = new RadarRenderer(svgElement);
         this.renderer.renderFIRBoundary();
         this.renderer.renderEntryPoints();
+        this.renderer.renderReferenceMarkers();
         this.startAnimationLoop();
     }
 

@@ -132,13 +132,6 @@
         fill: var(--radar-amber);
         stroke: var(--radar-amber);
         stroke-width: 2;
-        filter: drop-shadow(0 0 6px var(--radar-amber));
-        animation: point-pulse 2s ease-in-out infinite;
-    }
-
-    @keyframes point-pulse {
-        0%, 100% { r: 5; opacity: 1; }
-        50% { r: 7; opacity: 0.7; }
     }
 
     .entry-label {
@@ -146,6 +139,20 @@
         font-size: 11px;
         font-weight: 600;
         letter-spacing: 0.5px;
+    }
+
+    /* Display-only waypoints (not used for track routing) */
+    .fir-reference-point {
+        fill: rgba(0, 212, 255, 0.25);
+        stroke: var(--radar-cyan);
+        stroke-width: 2;
+    }
+
+    .fir-reference-label {
+        fill: var(--radar-cyan);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
     }
 
     .aircraft-symbol {
@@ -504,6 +511,9 @@
                         <!-- Entry Points (rendered by radar.js) -->
                         <g id="entryPoints"></g>
 
+                        <!-- FIR reference waypoints RK, DI, … (display-only, radar.js) -->
+                        <g id="firReferenceMarkers"></g>
+
                         <!-- Conflict Lines Layer -->
                         <g id="conflictGroup"></g>
 
@@ -519,6 +529,10 @@
                     <div class="legend-item">
                         <div class="legend-color" style="background: rgba(0, 212, 255, 0.3); border: 2px dashed var(--radar-cyan);"></div>
                         <span class="legend-text">Pakistan FIR Boundary</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: rgba(0, 212, 255, 0.25); border: 2px solid var(--radar-cyan); border-radius: 50%;"></div>
+                        <span class="legend-text">FIR reference waypoint</span>
                     </div>
                     <div class="legend-item">
                         <div class="legend-color" style="background: var(--radar-amber); border-radius: 50%;"></div>
