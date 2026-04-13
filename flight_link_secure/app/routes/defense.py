@@ -38,6 +38,7 @@ def defense_radar():
         radar_interp_segment_sec=float(cfg.get('RADAR_INTERP_SEGMENT_SEC', 0.2)),
         radar_demo_mode=bool(cfg.get('RADAR_DEMO_MODE', False)),
         radar_demo_animation_speed=float(cfg.get('RADAR_DEMO_ANIMATION_SPEED', 3.0)),
+        radar_test_monitor=bool(cfg.get('RADAR_TEST_MONITOR', False)),
     )
 
 

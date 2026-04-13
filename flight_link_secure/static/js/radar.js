@@ -2510,6 +2510,9 @@ const AIRSPACE_ROUTE_RULES = {
     M881: ['M881'],
     M875: ['M875'],
     G325: ['G325'],
+    L509: ['L509'],
+    L750: ['L750'],
+    P628: ['P628'],
 };
 
 const AIRWAY_POLYLINES = {
@@ -2564,6 +2567,9 @@ const AIRWAY_POLYLINES = {
         { lat: CORRECTED_ENTRY_POINTS.ASSVIB.lat, lon: CORRECTED_ENTRY_POINTS.ASSVIB.lon },
     ],
 };
+
+/** Match ``config/radar_airways.json`` route_anchors (fallback slice when fir_entry not in route tokens). */
+const ROUTE_ANCHORS = new Set(['SULOM', 'GUGAL', 'PURPA']);
 
 /**
  * Named PAK fixes for sim / lookups: corrected entries, reference markers, and
@@ -2726,24 +2732,50 @@ function parseSpeedToKnots(speedField) {
     return 450;
 }
 
-function flattenAirwayPointsForRouteTokens(tokens) {
-    const pts = [];
-    let entryIdx = -1;
-    for (let i = 0; i < tokens.length; i++) {
-        if (tokens[i] === 'SULOM' || tokens[i] === 'GUGAL' || tokens[i] === 'PURPA') {
-            entryIdx = i;
-            break;
+function airwaySliceStart(tokens, firEntry) {
+    const fe = normalizeFirEntryKeyForCoords(firEntry);
+    if (fe) {
+        for (let i = 0; i < tokens.length; i++) {
+            if (tokens[i] === fe) return i + 1;
         }
     }
-    const start = entryIdx >= 0 ? entryIdx + 1 : 0;
+    for (let i = 0; i < tokens.length; i++) {
+        if (ROUTE_ANCHORS.has(tokens[i])) return i + 1;
+    }
+    return 0;
+}
+
+const _ORIENT_TIE_EPS_NM = 1e-6;
+
+function flattenAirwayPointsForRouteTokens(firEntry, tokens) {
+    const pts = [];
+    const start = airwaySliceStart(tokens, firEntry);
     const slice = tokens.slice(start);
+    const entryCoord = getResolvedEntryCoordinate(firEntry);
+    let prev =
+        entryCoord &&
+        Number.isFinite(entryCoord.lat) &&
+        Number.isFinite(entryCoord.lon)
+            ? { lat: entryCoord.lat, lon: entryCoord.lon }
+            : null;
+
     for (const tok of slice) {
         const list = AIRSPACE_ROUTE_RULES[tok];
         if (!list) continue;
         for (const aid of list) {
             const poly = AIRWAY_POLYLINES[aid];
-            if (!poly) continue;
-            for (const p of poly) {
+            if (!poly || !poly.length) continue;
+            let ordered;
+            if (!prev) {
+                ordered = poly;
+            } else {
+                const first = poly[0];
+                const lastV = poly[poly.length - 1];
+                const d0 = haversineNm(prev.lat, prev.lon, first.lat, first.lon);
+                const d1 = haversineNm(prev.lat, prev.lon, lastV.lat, lastV.lon);
+                ordered = d0 <= d1 + _ORIENT_TIE_EPS_NM ? poly : [...poly].reverse();
+            }
+            for (const p of ordered) {
                 const last = pts[pts.length - 1];
                 if (
                     last &&
@@ -2753,6 +2785,7 @@ function flattenAirwayPointsForRouteTokens(tokens) {
                     continue;
                 }
                 pts.push({ lat: p.lat, lon: p.lon });
+                prev = { lat: p.lat, lon: p.lon };
             }
         }
     }
@@ -2814,7 +2847,7 @@ function buildSimulatedRoutePath(firEntry, routeStr) {
     const entry = getResolvedEntryCoordinate(firEntry);
     if (!entry) return [];
     const tokens = parseRouteTokens(routeStr);
-    let path = flattenAirwayPointsForRouteTokens(tokens);
+    let path = flattenAirwayPointsForRouteTokens(firEntry, tokens);
     if (!path.length) {
         path = [{ lat: entry.lat, lon: entry.lon }];
     } else {

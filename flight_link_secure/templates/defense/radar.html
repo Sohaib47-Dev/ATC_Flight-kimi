@@ -620,6 +620,30 @@
     </div>
 </div>
 
+{% if radar_test_monitor %}
+<div id="radarTestOverlay" class="radar-test-overlay" aria-live="polite">
+    Radar test monitor: waiting…
+</div>
+<style>
+.radar-test-overlay {
+    position: fixed;
+    bottom: 12px;
+    left: 12px;
+    z-index: 50;
+    font-size: 0.72rem;
+    line-height: 1.35;
+    background: rgba(0, 20, 40, 0.9);
+    color: #9fdfff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(0, 255, 255, 0.35);
+    max-width: min(360px, 92vw);
+    font-family: ui-monospace, Consolas, monospace;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+</style>
+{% endif %}
+
 <!-- Alert Container -->
 <div class="alert-container" id="alertContainer"></div>
 
@@ -872,6 +896,21 @@ $(document).ready(function() {
                 });
                 updateAircraftList();
                 updateStats();
+            });
+            socket.on('radar_test_stats', function (s) {
+                const el = document.getElementById('radarTestOverlay');
+                if (!el || !s) return;
+                const rec = (s.recent_errors && s.recent_errors.length)
+                    ? (' | last: ' + s.recent_errors.map(function (e) {
+                        return e.type + ':' + (e.callsign || '');
+                    }).join(', '))
+                    : '';
+                el.textContent =
+                    'active=' + (Number(s.active) || 0) +
+                    ' fail=' + (Number(s.failures) || 0) +
+                    ' done=' + (Number(s.completed_visible) || 0) +
+                    ' tick=' + (Number(s.tick) || 0) +
+                    rec;
             });
             socket.on('connect_error', function (err) {
                 console.warn('[radar socket] connect_error', err);

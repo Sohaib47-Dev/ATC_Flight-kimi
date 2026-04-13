@@ -93,26 +93,49 @@ def _route_anchor_tokens() -> set[str]:
     return {t.upper() for t in _load_raw().get("route_anchors", ["SULOM", "GUGAL", "PURPA"])}
 
 
-def flatten_airway_points_for_route_tokens(tokens: list[str]) -> list[tuple[float, float]]:
-    pts: list[tuple[float, float]] = []
+def _airway_slice_start(tokens: list[str], fir_entry: str | None) -> int:
+    """First index after FIR entry token, else after first route anchor, else 0."""
+    fe = normalize_fir_entry_key(fir_entry)
+    if fe:
+        for i, t in enumerate(tokens):
+            if t == fe:
+                return i + 1
     anchors = _route_anchor_tokens()
-    entry_idx = -1
-    for i, tok in enumerate(tokens):
-        if tok in anchors:
-            entry_idx = i
-            break
-    start = entry_idx + 1 if entry_idx >= 0 else 0
+    for i, t in enumerate(tokens):
+        if t in anchors:
+            return i + 1
+    return 0
+
+
+_ORIENT_TIE_EPS_NM = 1e-6
+
+
+def flatten_airway_points_for_route_tokens(
+    tokens: list[str],
+    fir_entry: str | None = None,
+) -> list[tuple[float, float]]:
+    pts: list[tuple[float, float]] = []
+    start = _airway_slice_start(tokens, fir_entry)
     rules = _airspace_rules()
     polys = _airway_polylines()
+    prev_ll: tuple[float, float] | None = resolve_fir_entry_lat_lon(fir_entry)
+
     for tok in tokens[start:]:
         for aid in rules.get(tok, []):
             poly = polys.get(aid.upper())
             if not poly:
                 continue
-            for lat, lon in poly:
+            if prev_ll is None:
+                ordered = poly
+            else:
+                d0 = _haversine_nm(prev_ll, poly[0])
+                d1 = _haversine_nm(prev_ll, poly[-1])
+                ordered = poly if d0 <= d1 + _ORIENT_TIE_EPS_NM else list(reversed(poly))
+            for lat, lon in ordered:
                 if pts and abs(pts[-1][0] - lat) < 1e-8 and abs(pts[-1][1] - lon) < 1e-8:
                     continue
                 pts.append((lat, lon))
+                prev_ll = (lat, lon)
     return pts
 
 
@@ -192,7 +215,7 @@ def build_simulated_route_path(fir_entry: str | None, route_str: str | None) -> 
     if not entry:
         return []
     tokens = parse_route_tokens(route_str)
-    path = flatten_airway_points_for_route_tokens(tokens)
+    path = flatten_airway_points_for_route_tokens(tokens, fir_entry)
     elat, elon = entry
     if not path:
         path = [(elat, elon)]

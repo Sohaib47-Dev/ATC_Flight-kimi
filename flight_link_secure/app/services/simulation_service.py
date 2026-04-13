@@ -9,11 +9,12 @@ Uses TrackData.last_simulated_at for dt integration (wall seconds, capped).
 from __future__ import annotations
 
 import json
+import logging
 import re
 from datetime import datetime, timezone
 from typing import Any
 
-from flask import current_app
+from flask import Flask, current_app
 
 from app.extensions import db
 from app.models import TrackData
@@ -29,6 +30,7 @@ from app.services.route_builder import build_simulated_route_path, path_fingerpr
 from app.services.separation_engine import TrackSnapshot, find_conflict_ids
 
 _DT_CAP_SEC = 300.0
+logger = logging.getLogger(__name__)
 
 
 def _config_bool(key: str, default: bool = False) -> bool:
@@ -168,7 +170,7 @@ def _advance_track(track: TrackData, now: datetime) -> dict[str, Any]:
     }
 
 
-def advance_defense_tracks_and_build_payload() -> list[dict[str, Any]]:
+def advance_defense_tracks_and_build_payload(app: Flask | None = None) -> list[dict[str, Any]]:
     """
     Advance all active defense tracks, commit, run separation, return JSON rows for GET /api/defense/tracks.
     """
@@ -201,6 +203,13 @@ def advance_defense_tracks_and_build_payload() -> list[dict[str, Any]]:
         out.append(row)
 
     db.session.commit()
+    try:
+        from app.services import radar_test_monitor as radar_test_monitor
+
+        app_obj = app if app is not None else current_app
+        radar_test_monitor.process_tick(app_obj, out)
+    except Exception:
+        logger.exception("radar_test_monitor.process_tick failed")
     return out
 
 
