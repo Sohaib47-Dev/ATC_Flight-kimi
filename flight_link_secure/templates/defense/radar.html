@@ -104,63 +104,112 @@
     }
 
     #radarSvg {
-        filter: drop-shadow(0 0 10px rgba(0, 212, 255, 0.1));
+        filter: drop-shadow(0 0 6px rgba(0, 212, 255, 0.04));
+    }
+
+    /* FIR outline: faint, static, never blocks clicks (aircraft / controls above). */
+    #firBoundary {
+        pointer-events: none;
     }
 
     .fir-boundary {
-        fill: rgba(0, 212, 255, 0.08);
-        stroke: var(--radar-cyan);
-        stroke-width: 2.5;
-        stroke-dasharray: 8, 4;
-        animation: fir-glow 3s ease-in-out infinite;
-    }
-
-    @keyframes fir-glow {
-        0%, 100% { stroke-opacity: 0.6; }
-        50% { stroke-opacity: 1; }
+        fill: rgba(0, 212, 255, 0.03);
+        stroke: rgba(0, 212, 255, 0.22);
+        stroke-width: 1.1;
+        stroke-dasharray: 6, 5;
     }
 
     .fir-label {
-        fill: var(--radar-cyan);
-        font-size: 18px;
-        font-weight: 700;
-        letter-spacing: 2px;
-        text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+        fill: rgba(0, 212, 255, 0.35);
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: 1px;
+        text-shadow: none;
+        pointer-events: none;
     }
 
     .entry-point {
-        fill: var(--radar-amber);
-        stroke: var(--radar-amber);
-        stroke-width: 2;
+        fill: rgba(255, 170, 0, 0.32);
+        stroke: rgba(255, 170, 0, 0.72);
+        stroke-width: 1.2;
     }
 
     .entry-label {
-        fill: var(--radar-amber);
-        font-size: 11px;
+        fill: rgba(255, 170, 0, 0.82);
+        font-size: 10px;
         font-weight: 600;
         letter-spacing: 0.5px;
     }
 
     /* Display-only waypoints (not used for track routing) */
     .fir-reference-point {
-        fill: rgba(0, 212, 255, 0.25);
-        stroke: var(--radar-cyan);
-        stroke-width: 2;
+        fill: rgba(0, 255, 255, 0.22);
+        stroke: rgba(0, 255, 255, 0.68);
+        stroke-width: 1.2;
     }
 
     .fir-reference-label {
-        fill: var(--radar-cyan);
+        fill: rgba(0, 255, 255, 0.82);
         font-size: 10px;
         font-weight: 600;
         letter-spacing: 0.3px;
     }
 
+    /* AIRWAY_POLYLINES display: faint, thin dashed tracks */
+    .airway-polyline {
+        fill: none;
+        stroke: rgba(0, 212, 255, 0.26);
+        stroke-width: 1;
+        stroke-dasharray: 3, 4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .airway-label {
+        fill: rgba(200, 245, 255, 0.55);
+        stroke: rgba(0, 0, 0, 0.28);
+        stroke-width: 1.4;
+        paint-order: stroke fill;
+        font-size: 9px;
+        font-weight: 600;
+    }
+
+    .airway-waypoint-label {
+        fill: rgba(255, 255, 255, 0.55);
+        stroke: rgba(0, 0, 0, 0.28);
+        stroke-width: 1.15;
+        paint-order: stroke fill;
+        font-size: 8px;
+        font-weight: 600;
+    }
+
+    .track-route-polyline {
+        fill: none;
+        stroke: rgba(255, 170, 0, 0.35);
+        stroke-width: 1;
+        stroke-dasharray: 2, 4;
+        pointer-events: none;
+    }
+
     .aircraft-symbol {
         fill: var(--radar-red);
         stroke: var(--radar-red);
-        stroke-width: 2;
-        filter: drop-shadow(0 0 8px var(--radar-red));
+        stroke-width: 1.25;
+        filter: drop-shadow(0 0 6px var(--radar-red));
         animation: aircraft-pulse 1.5s ease-in-out infinite;
+    }
+
+    .aircraft-symbol.aircraft-conflict {
+        fill: #ff2222;
+        stroke: #ff2222;
+        stroke-width: 1.25;
+        filter: drop-shadow(0 0 8px #ff2222);
+        animation: aircraft-conflict-blink 0.6s ease-in-out infinite;
+    }
+
+    @keyframes aircraft-conflict-blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.45; }
     }
 
     @keyframes aircraft-pulse {
@@ -514,6 +563,12 @@
                         <!-- FIR reference waypoints RK, DI, … (display-only, radar.js) -->
                         <g id="firReferenceMarkers"></g>
 
+                        <!-- Simulated airways (A466, M875, M881, L509, G325, …) -->
+                        <g id="airwaysGroup"></g>
+
+                        <!-- Per-track resolved routes from server (dotted) -->
+                        <g id="trackRoutesGroup"></g>
+
                         <!-- Conflict Lines Layer -->
                         <g id="conflictGroup"></g>
 
@@ -531,12 +586,16 @@
                         <span class="legend-text">Pakistan FIR Boundary</span>
                     </div>
                     <div class="legend-item">
-                        <div class="legend-color" style="background: rgba(0, 212, 255, 0.25); border: 2px solid var(--radar-cyan); border-radius: 50%;"></div>
+                        <div class="legend-color" style="width: 10px; height: 10px; min-width: 10px; background: rgba(0, 255, 255, 0.22); border: 1.2px solid rgba(0, 255, 255, 0.68); border-radius: 50%;"></div>
                         <span class="legend-text">FIR reference waypoint</span>
                     </div>
                     <div class="legend-item">
-                        <div class="legend-color" style="background: var(--radar-amber); border-radius: 50%;"></div>
+                        <div class="legend-color" style="width: 10px; height: 10px; min-width: 10px; background: rgba(255, 170, 0, 0.32); border: 1.2px solid rgba(255, 170, 0, 0.72); border-radius: 50%;"></div>
                         <span class="legend-text">FIR Entry Point</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="box-shadow: none; background: transparent; border-radius: 2px; border: 1px dashed rgba(0, 212, 255, 0.35);"></div>
+                        <span class="legend-text">Simulated airway (display)</span>
                     </div>
                     <div class="legend-item">
                         <div class="legend-color" style="background: var(--radar-red); clip-path: polygon(50% 0%, 100% 100%, 0% 100%);"></div>
@@ -571,11 +630,20 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
 <script src="{{ url_for('static', filename='js/radar.js') }}"></script>
 <script>
+window.__RADAR_CONFIG__ = {
+    interpSegmentSec: {{ radar_interp_segment_sec|default(0.45)|tojson }},
+    demoMode: {{ radar_demo_mode|default(false)|tojson }},
+    demoAnimationSpeed: {{ radar_demo_animation_speed|default(3.0)|tojson }},
+    wsTickMs: {{ radar_ws_tick_ms|default(500)|tojson }},
+};
 let aircraftData = [];
 let previousAircraftIds = [];
 let processedAlerts = [];
+/** Skip overlapping bootstrap GET while a request is in flight. */
+let radarTracksFetchBusy = false;
 
 // Make playAlertSound globally accessible for radar.js
 window.playAlertSound = function() {
@@ -635,25 +703,38 @@ function playAlertSound() {
     window.playAlertSound();
 }
 
-// Fetch active tracks
-function fetchActiveTracks() {
+/**
+ * One-time (or re-) hydration: full track rows including ``resolved_path`` for route drawing.
+ * @param {function=} onDone optional callback after engine update
+ */
+function fetchActiveTracks(onDone) {
+    if (radarTracksFetchBusy) {
+        return;
+    }
+    radarTracksFetchBusy = true;
     $.ajax({
         url: '{{ url_for("defense.api_defense_tracks") }}',
         method: 'GET',
+        complete: function() {
+            radarTracksFetchBusy = false;
+        },
         success: function(response) {
             aircraftData = response;
-
-            // Update radar engine with new data
             window.radarEngine.updateAircraftData(response);
-
-            // Update aircraft list panel
             updateAircraftList();
-
-            // Update statistics
             updateStats();
+            if (window.config && window.config.radarDebugLog) {
+                console.log('[radar hydrate] tracks', response.length);
+            }
+            if (typeof onDone === 'function') {
+                onDone();
+            }
         }
     });
 }
+window.fetchRadarHydration = function () {
+    fetchActiveTracks(null);
+};
 
 // Update aircraft list panel
 function updateAircraftList() {
@@ -775,12 +856,30 @@ $(document).ready(function() {
         }
     });
 
-    // Fetch initial data
-    fetchActiveTracks();
     checkNewAlerts();
 
-    // Set up periodic updates
-    setInterval(fetchActiveTracks, 5000);
+    fetchActiveTracks(function connectRadarSocket() {
+        const socket = typeof io === 'function' ? io({ transports: ['websocket', 'polling'] }) : null;
+        if (socket) {
+            socket.on('aircraft_update', function (msg) {
+                const tracks = (msg && msg.tracks) || [];
+                window.radarEngine.applySocketTrackUpdates(tracks);
+                tracks.forEach(function (t) {
+                    const i = aircraftData.findIndex(function (a) { return a.id === t.id; });
+                    if (i >= 0) {
+                        Object.assign(aircraftData[i], t);
+                    }
+                });
+                updateAircraftList();
+                updateStats();
+            });
+            socket.on('connect_error', function (err) {
+                console.warn('[radar socket] connect_error', err);
+            });
+        } else {
+            console.warn('[radar] Socket.IO client not loaded; open /defense/radar with socket.io CDN available.');
+        }
+    });
     setInterval(checkNewAlerts, 3000);
 });
 </script>

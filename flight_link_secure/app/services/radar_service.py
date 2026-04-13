@@ -18,24 +18,24 @@ import math
 from typing import Any, Iterable
 
 from app.models import TrackData
+from app.services import route_builder
 
-# Exact FIR entry coordinates (same as CORRECTED_ENTRY_POINTS in static/js/radar.js).
-CORRECTED_ENTRY_POINTS: dict[str, tuple[float, float]] = {
-    "SULOM": (31.338018132990058, 74.47071723937988),
-    "PURPA": (37.03607265125621, 75.1394229888916),
-    "DOBAT": (33.13683547973633, 69.61276206970214),
-    "BIROS": (31.56054820667614, 67.72465057373047),
-    "SIRKA": (29.597102550159804, 65.63986034393311),
-    "TELEM": (29.45883184259588, 62.119318103790285),
-    "VIKIT": (27.46773204456676, 69.75043678283691),
-    "MERUN": (28.02081487482244, 71.61888160705567),
-    "GUGAL": (30.509690024636008, 73.93968505859375),
-    "LAJAK": (34.02176881269975, 70.2027976989746),
-}
+
+def _sync_waypoints_from_config() -> None:
+    """Load waypoint tables from ``config/radar_airways.json`` (single source with radar.js)."""
+    global WAYPOINTS, CORRECTED_ENTRY_POINTS
+    route_builder.reload_airways_config()
+    CORRECTED_ENTRY_POINTS = dict(route_builder.corrected_entry_points())
+    WAYPOINTS = dict(route_builder.all_waypoints_latlon())
+
+
+WAYPOINTS: dict[str, tuple[float, float]] = {}
+CORRECTED_ENTRY_POINTS: dict[str, tuple[float, float]] = {}
+_sync_waypoints_from_config()
 
 
 def normalize_fir_entry_key_for_coords(fir_entry: str | None) -> str | None:
-    """Match radar.js normalizeFirEntryKeyForCoords (parser still emits DODAT)."""
+    """Match radar.js normalizeFirEntryKeyForCoords (canonical DOBAT; legacy DODAT in routes)."""
     if not fir_entry:
         return None
     k = fir_entry.strip().upper()
@@ -48,16 +48,9 @@ def resolve_fir_entry_lat_lon(fir_entry: str | None) -> tuple[float, float] | No
     """
     Return corrected (lat, lon) for known FIR entry names, else None.
 
-    Used for server-side helpers and tests; radar rendering uses the parallel
-    logic in radar.js. Does not change DB or API payloads by itself.
+    Delegates to :mod:`app.services.route_builder` (``config/radar_airways.json``).
     """
-    key = normalize_fir_entry_key_for_coords(fir_entry)
-    if not key:
-        return None
-    pair = CORRECTED_ENTRY_POINTS.get(key)
-    if not pair:
-        return None
-    return pair[0], pair[1]
+    return route_builder.resolve_fir_entry_lat_lon(fir_entry)
 
 
 def _closest_point_on_segment(
@@ -139,12 +132,10 @@ def fetch_active_radar_tracks() -> list[TrackData]:
 
 def get_active_tracks_json() -> list[dict[str, Any]]:
     """
-    Same data as ``fetch_active_radar_tracks()``, serialized for JSON responses.
+    Same payload as ``GET /api/defense/tracks`` (server sim + ``x``, ``y``, ``conflict``).
 
-    Uses :meth:`TrackData.to_dict` per row — identical shape to
-    ``[t.to_dict() for t in defense_service.list_active_defense_tracks()]``.
-
-    Returns:
-        List of dictionaries safe for :func:`flask.jsonify`.
+    Requires a Flask application context for :mod:`app.services.simulation_service`.
     """
-    return [track.to_dict() for track in fetch_active_radar_tracks()]
+    from app.services import simulation_service
+
+    return simulation_service.advance_defense_tracks_and_build_payload()

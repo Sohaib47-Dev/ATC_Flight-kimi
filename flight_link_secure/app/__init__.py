@@ -25,11 +25,12 @@ def create_app(config_name=None):
     )
     app.config.from_object(config_by_name[config_name])
 
-    from app.extensions import db, login_manager, csrf
+    from app.extensions import db, login_manager, csrf, socketio
 
     db.init_app(app)
     csrf.init_app(app)
     login_manager.init_app(app)
+    socketio.init_app(app, cors_allowed_origins=None)
     login_manager.login_view = 'auth.login'
     login_manager.login_message = 'Please log in to access this page.'
 
@@ -45,6 +46,10 @@ def create_app(config_name=None):
     app.register_blueprint(admin.bp)
     app.register_blueprint(atc.bp)
     app.register_blueprint(defense.bp)
+
+    from app.socketio_handlers import register_radar_socketio
+
+    register_radar_socketio(app, socketio)
 
     @app.errorhandler(403)
     def forbidden(error):

@@ -2,10 +2,51 @@
 from datetime import datetime
 
 from app.extensions import db
-from app.models import FlightPlan, TrackData, DefenseMessage
+from app.models import DefenseMessage, FlightPlan, TrackData, User
+from modules.encryption import encrypt_track_data
 from modules.flight_plan_parser import FlightPlanParser
 from modules.validators import validate_atc_estimates
-from modules.encryption import encrypt_track_data
+
+
+class TrackDeactivateError(Exception):
+    """Base class for track deactivation failures."""
+
+
+class TrackNotFoundError(TrackDeactivateError):
+    """Raised when no ``track_data`` row exists for the given id."""
+
+
+class TrackAlreadyInactiveError(TrackDeactivateError):
+    """Raised when the track is not ``active`` (idempotent guard)."""
+
+
+def deactivate_track(track_id, user):
+    """
+    Deactivate a single track: set status to terminated and completion time (UTC).
+
+    ``user`` must be an ATC operator (caller enforces via ``@atc_required``).
+
+    Returns:
+        The updated :class:`TrackData` instance.
+
+    Raises:
+        TrackNotFoundError: No row for ``track_id``.
+        TrackAlreadyInactiveError: ``status`` is not active (no DB changes).
+    """
+    if not isinstance(user, User) or not (user.is_atc() or user.is_admin()):
+        raise TrackDeactivateError('Only ATC or admin users may deactivate tracks.')
+
+    track = TrackData.query.get(track_id)
+    if track is None:
+        raise TrackNotFoundError(f'No track found with id {track_id}')
+
+    if (track.status or '').lower() != 'active':
+        raise TrackAlreadyInactiveError('Track is already inactive')
+
+    track.status = 'terminated'
+    track.completed_at = datetime.utcnow()
+    db.session.commit()
+    return track
 
 
 def lookup_and_parse_flight_plan(callsign):
@@ -277,6 +318,70 @@ def add_flight_plan_post(callsign, raw_flight_plan, replace_existing):
         'action': 'redirect',
         'flash': (f'Flight plan {callsign} added successfully!', 'success'),
         'logs': [('FLIGHT_PLAN_ADDED', f'Callsign: {callsign}, ID: {new_plan.id}')],
+    }
+
+
+def edit_flight_plan_post(flight_plan, raw_flight_plan):
+    """
+    Update ``FlightPlan.raw_flight_plan`` in place after ICAO validation.
+
+    Returns the same outcome shape as :func:`add_flight_plan_post`:
+    ``action`` ('render' | 'redirect'), ``template``, ``context``, ``flash``, ``logs``.
+    """
+    ctx_base = {'flight_plan': flight_plan, 'raw_value': (raw_flight_plan or '').strip()}
+
+    if not (raw_flight_plan or '').strip():
+        return {
+            'action': 'render',
+            'template': 'atc/edit_flight_plan.html',
+            'context': ctx_base,
+            'flash': ('Flight plan text is required', 'error'),
+        }
+
+    active = TrackData.query.filter_by(
+        flight_plan_id=flight_plan.id,
+        status='active',
+    ).count()
+    if active > 0:
+        return {
+            'action': 'render',
+            'template': 'atc/edit_flight_plan.html',
+            'context': ctx_base,
+            'flash': (
+                f'Cannot edit: {active} active track(s). Complete or deactivate tracks first.',
+                'error',
+            ),
+        }
+
+    parser = FlightPlanParser()
+    parsed = parser.parse(raw_flight_plan)
+    if not parsed:
+        errors = ', '.join(parser.get_errors())
+        return {
+            'action': 'render',
+            'template': 'atc/edit_flight_plan.html',
+            'context': ctx_base,
+            'flash': (f'Flight plan validation failed: {errors}', 'error'),
+        }
+
+    if parsed.callsign != flight_plan.callsign:
+        return {
+            'action': 'render',
+            'template': 'atc/edit_flight_plan.html',
+            'context': ctx_base,
+            'flash': (
+                f'ICAO callsign in the plan is "{parsed.callsign}" but this record is '
+                f'"{flight_plan.callsign}". The filed callsign must match.',
+                'error',
+            ),
+        }
+
+    flight_plan.raw_flight_plan = raw_flight_plan.strip()
+    db.session.commit()
+    return {
+        'action': 'redirect',
+        'flash': (f'Flight plan {flight_plan.callsign} updated successfully.', 'success'),
+        'logs': [('FLIGHT_PLAN_UPDATED', f'ID: {flight_plan.id}, Callsign: {flight_plan.callsign}')],
     }
 
 

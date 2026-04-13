@@ -31,6 +31,7 @@
                             <th><i class="bi bi-broadcast"></i> SSR</th>
                             <th><i class="bi bi-activity"></i> Status</th>
                             <th><i class="bi bi-send"></i> Sent</th>
+                            <th><i class="bi bi-slash-circle"></i> Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -47,7 +48,7 @@
                                 {% if track.status == 'active' %}
                                     <span class="badge badge-success"><i class="bi bi-circle-fill"></i> Active</span>
                                 {% else %}
-                                    <span class="badge bg-secondary"><i class="bi bi-check-circle"></i> Completed</span>
+                                    <span class="badge bg-secondary"><i class="bi bi-slash-circle"></i> {{ (track.status or 'inactive')|upper }}</span>
                                 {% endif %}
                             </td>
                             <td class="text-center">
@@ -57,10 +58,22 @@
                                     <i class="bi bi-x-circle-fill text-radar-amber fs-5"></i>
                                 {% endif %}
                             </td>
+                            <td class="text-center" onclick="event.stopPropagation();">
+                                {% if track.status == 'active' %}
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-danger btn-deactivate-track"
+                                        data-track-id="{{ track.id }}"
+                                        data-callsign="{{ track.callsign }}">
+                                    <i class="bi bi-power"></i> Deactivate Track
+                                </button>
+                                {% else %}
+                                <span class="text-secondary small">—</span>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="9" class="text-center text-muted py-5">
+                            <td colspan="10" class="text-center text-muted py-5">
                                 <i class="bi bi-inbox fs-1 text-muted d-block mb-3"></i>
                                 <strong>No tracks created yet</strong><br>
                                 <small>Start by retrieving a flight plan from the database</small><br>
@@ -77,7 +90,116 @@
     </div>
 </div>
 
+<div id="atcDeactivateToast" class="toast align-items-center border-0 position-fixed top-0 end-0 m-3" role="alert" aria-live="assertive" aria-atomic="true" style="z-index: 1090;">
+    <div class="d-flex">
+        <div class="toast-body" id="atcDeactivateToastBody"></div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+</div>
+
+<div class="modal fade" id="deactivateTrackModal" tabindex="-1" aria-labelledby="deactivateTrackModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-card-dark border-secondary text-light">
+            <div class="modal-header border-secondary">
+                <h5 class="modal-title text-radar-amber" id="deactivateTrackModalLabel">
+                    <i class="bi bi-exclamation-triangle me-2"></i>Deactivate Track
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-2">Are you sure you want to deactivate this track?</p>
+                <p class="mb-0 text-secondary small">The track will no longer appear on the defense radar as active. This cannot be undone from the dashboard.</p>
+                <p class="mt-3 mb-0"><strong class="text-radar-cyan" id="deactivateTrackModalCallsign"></strong></p>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeactivateTrackBtn" disabled>
+                    <i class="bi bi-power me-1"></i>Deactivate
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+const CSRF_TOKEN = '{{ csrf_token() }}';
+const DEACTIVATE_TRACK_PREFIX = "{{ url_for('atc.atc_deactivate_track', track_id=888888) }}".replace(/\/888888$/, '/');
+
+let pendingDeactivateTrackId = null;
+
+function showDeactivateToast(message, kind) {
+    const el = document.getElementById('atcDeactivateToast');
+    const body = document.getElementById('atcDeactivateToastBody');
+    body.textContent = message;
+    el.classList.remove('text-bg-success', 'text-bg-danger', 'text-bg-warning');
+    if (kind === 'error') el.classList.add('text-bg-danger');
+    else if (kind === 'warning') el.classList.add('text-bg-warning');
+    else el.classList.add('text-bg-success');
+    const t = bootstrap.Toast.getOrCreateInstance(el, { delay: 5000 });
+    t.show();
+}
+
+document.querySelectorAll('.btn-deactivate-track').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        pendingDeactivateTrackId = parseInt(btn.getAttribute('data-track-id'), 10);
+        document.getElementById('deactivateTrackModalCallsign').textContent = btn.getAttribute('data-callsign') || '';
+        const confirmBtn = document.getElementById('confirmDeactivateTrackBtn');
+        confirmBtn.disabled = false;
+        const modal = new bootstrap.Modal(document.getElementById('deactivateTrackModal'));
+        modal.show();
+    });
+});
+
+document.getElementById('confirmDeactivateTrackBtn').addEventListener('click', function () {
+    if (!pendingDeactivateTrackId) return;
+    const confirmBtn = this;
+    confirmBtn.disabled = true;
+    const url = DEACTIVATE_TRACK_PREFIX + pendingDeactivateTrackId;
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': CSRF_TOKEN,
+            'Accept': 'application/json',
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({}),
+    })
+        .then(function (r) { return r.json().then(function (data) { return { okHttp: r.ok, status: r.status, data: data }; }); })
+        .then(function (res) {
+            const data = res.data || {};
+            const msg = data.message || 'Request failed';
+            const modalEl = document.getElementById('deactivateTrackModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+
+            if (data.ok === true) {
+                showDeactivateToast(msg, 'success');
+                window.location.reload();
+                return;
+            }
+            if (res.status === 404) {
+                showDeactivateToast(msg, 'error');
+                confirmBtn.disabled = false;
+                return;
+            }
+            if (res.status === 200 && data.ok === false) {
+                showDeactivateToast(msg, 'warning');
+                window.location.reload();
+                return;
+            }
+            showDeactivateToast(msg, 'error');
+            confirmBtn.disabled = false;
+        })
+        .catch(function () {
+            const modalEl = document.getElementById('deactivateTrackModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+            showDeactivateToast('Network error. Please try again.', 'error');
+            confirmBtn.disabled = false;
+        });
+});
+
 function viewFlightPlan(callsign) {
     // Create a form to POST the callsign to the flight plan page
     const form = document.createElement('form');

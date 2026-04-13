@@ -22,6 +22,60 @@
 // ===================================================================
 
 /**
+ * Hot-tunable from the browser console: ``window.config.animationSpeedMultiplier``.
+ * Visual only (lerp + client sim along-path); does not change server physics or GS label.
+ */
+function initRadarWindowConfig() {
+    if (typeof window === 'undefined') return;
+    const defaults = {
+        animationSpeedMultiplier: 2.0,
+        /** Set true for occasional ``[radar …]`` console logs (poll / sim). */
+        radarDebugLog: false,
+    };
+    window.config = Object.assign({}, defaults, window.config || {});
+}
+
+function getRadarDebugLog() {
+    return typeof window !== 'undefined' && window.config && !!window.config.radarDebugLog;
+}
+
+/**
+ * Read every frame so console edits apply immediately.
+ * @returns {number}
+ */
+function getAnimationSpeedMultiplier() {
+    if (typeof window !== 'undefined' && window.config) {
+        const v = window.config.animationSpeedMultiplier;
+        if (Number.isFinite(v) && v > 0) return v;
+    }
+    return 2.0;
+}
+
+/** Demo / presentation: speeds up **position interpolation only** (not ground speed or server physics). */
+function getDemoSpeedMultiplier() {
+    const c = typeof window !== 'undefined' ? window.__RADAR_CONFIG__ : null;
+    if (c && c.demoMode) {
+        const v = c.demoAnimationSpeed;
+        if (Number.isFinite(v) && v > 0) return v;
+    }
+    return 1.0;
+}
+
+function getInterpSegmentSec() {
+    const c = typeof window !== 'undefined' ? window.__RADAR_CONFIG__ : null;
+    if (c && Number.isFinite(c.interpSegmentSec) && c.interpSegmentSec > 0.05) {
+        return c.interpSegmentSec;
+    }
+    return 0.45;
+}
+
+function lerp(a, b, t) {
+    return a + (b - a) * t;
+}
+
+initRadarWindowConfig();
+
+/**
  * Real Pakistan FIR Boundary Coordinates (Geographic)
  * Converted to SVG coordinates for visualization
  */
@@ -2317,41 +2371,49 @@ const FIR_SECTORS = {
 };
 
 /**
- * FIR entry points still using nominal coords + snap-to-polyline (no radar-debug override).
+ * Nominal FIR entry coords + snap-to-polyline when not in CORRECTED_ENTRY_POINTS.
+ * REGET is not an FIR entry fix; it lives only under FIR_REFERENCE_MARKERS.
  */
-const ENTRY_POINTS = {
-    'REGET': { lat: 32.346373, lon: 78.943429 },
-};
+const ENTRY_POINTS = {};
 
 /**
  * Exact entry coordinates from radar debug (override snap for these keys).
- * Legacy flight plans may use DODAT; treat as DOBAT (see normalizeFirEntryKeyForCoords).
+ * Canonical FIR entry name is DOBAT; legacy route text may use DODAT (see normalizeFirEntryKeyForCoords).
  */
 const CORRECTED_ENTRY_POINTS = {
-    SULOM: { lat: 31.338018132990058, lon: 74.47071723937988 },
+    /** Former GUGAL position (preserved); FIR entry name SULOM uses this coordinate. */
+    SULOM: { lat: 30.509690024636008, lon: 73.93968505859375 },
+    /** New GUGAL position (user-defined). */
+    GUGAL: { lat: 30.045302068536934, lon: 73.4627399444580 },
     PURPA: { lat: 37.03607265125621, lon: 75.1394229888916 },
-    DOBAT: { lat: 33.13683547973633, lon: 69.61276206970214 },
+    DOBAT: { lat: 32.2238996332342, lon: 69.22339515686035},
     BIROS: { lat: 31.56054820667614, lon: 67.72465057373047 },
     SIRKA: { lat: 29.597102550159804, lon: 65.63986034393311 },
     TELEM: { lat: 29.45883184259588, lon: 62.119318103790285 },
     VIKIT: { lat: 27.46773204456676, lon: 69.75043678283691 },
-    MERUN: { lat: 28.02081487482244, lon: 71.61888160705567 },
-    GUGAL: { lat: 30.509690024636008, lon: 73.93968505859375 },
+    MERUN: { lat: 27.862922696200286, lon: 71.02741203308105 },
     LAJAK: { lat: 34.02176881269975, lon: 70.2027976989746 },
+    ASSVIB: { lat: 25.208944147283383, lon: 62.1800001144409 },
 };
 
 /**
  * Display-only FIR reference markers (not used for aircraft routing).
  */
 const FIR_REFERENCE_MARKERS = [
-    { code: 'RK', lat: 32.734191436767574, lon: 70.79595642089843 },
+    { code: 'PS', lat: 34.93481810136275, lon: 72.71749954223633 },
+    { code: 'NH', lat: 27.028034251819957, lon: 64.24250011444092 },
+    { code: 'HANGU', lat: 32.734191436767574, lon: 70.79595642089843 },
     { code: 'DI', lat: 30.938411282626067, lon: 71.2481616973877 },
     { code: 'MT', lat: 29.6065625, lon: 71.60624961853027 },
     { code: 'FA', lat: 32.313229300759055, lon: 74.31875 },
     { code: 'SD', lat: 34.861713881059124, lon: 74.54375 },
     { code: 'KC', lat: 26.298984929865057, lon: 66.13169593811035 },
     { code: 'SK', lat: 26.999563487659803, lon: 68.00669651031494 },
-    { code: 'Zohar', lat: 29.052161005193536, lon: 67.08258895874023 },
+    { code: 'ZOHAR', displayName: 'ZOHAR', lat: 29.052161005193536, lon: 67.08258895874023 },
+    { code: 'JHANG', displayName: 'JHANG', lat: 30.515151339444248, lon: 72.22054672241211 },
+    { code: 'RK', lat: 28.690810713334518, lon: 69.86616859436035 },
+    { code: 'ZB', lat: 29.576901799982245, lon: 68.90246505737305 },
+    { code: 'REGET', lat: 31.15090293190696, lon: 69.21194648742676 },
 ];
 
 function normalizeFirEntryKeyForCoords(firKey) {
@@ -2421,7 +2483,8 @@ function getSnappedEntryCoordinate(firKey) {
 }
 
 /**
- * Resolved lat/lon for an FIR entry name: corrected table first, else snapped nominal.
+ * Resolved lat/lon for an FIR entry name: corrected table, then FIR reference markers
+ * (e.g. REGET — not an entry point, but may appear as fir_entry / route context), then nominal snap.
  */
 function getResolvedEntryCoordinate(firKey) {
     const key = normalizeFirEntryKeyForCoords(firKey);
@@ -2429,23 +2492,296 @@ function getResolvedEntryCoordinate(firKey) {
     if (corrected) {
         return { lat: corrected.lat, lon: corrected.lon };
     }
+    const ref = FIR_REFERENCE_MARKERS.find((m) => m.code === key);
+    if (ref) {
+        return { lat: ref.lat, lon: ref.lon };
+    }
     return getSnappedEntryCoordinate(firKey);
 }
 
-/**
- * Conflict Detection Threshold (in SVG units)
- */
-const CONFLICT_THRESHOLD = 60; // pixels
+/** If true, tracks stay off the map until ``eto_utc`` (HHMM) UTC on the current UTC day. */
+const SIM_USE_ETO = false;
+
+const SEPARATION_THRESHOLD_NM = 15;
+
+/** Map airway / route token to simulated polyline ids (Pakistan airspace segments). */
+const AIRSPACE_ROUTE_RULES = {
+    A466: ['A466'],
+    M881: ['M881'],
+    M875: ['M875'],
+    G325: ['G325'],
+};
+
+const AIRWAY_POLYLINES = {
+    /** SULOM→JHANG (no vertex labels: fixes shown by entry/reference layers). */
+    A466: [
+        { lat: CORRECTED_ENTRY_POINTS.SULOM.lat, lon: CORRECTED_ENTRY_POINTS.SULOM.lon },
+        { lat: 30.515151339444248, lon: 72.22054672241211 },
+    ],
+    /** GUGAL→JHANG→DI→HANGU→DOBAT (no vertex labels). */
+    M875: [
+        { lat: CORRECTED_ENTRY_POINTS.GUGAL.lat, lon: CORRECTED_ENTRY_POINTS.GUGAL.lon },
+        { lat: 30.515151339444248, lon: 72.22054672241211 },
+        { lat: 30.938411282626067, lon: 71.2481616973877 },
+        { lat: 32.734191436767574, lon: 70.79595642089843 },
+        { lat: CORRECTED_ENTRY_POINTS.DOBAT.lat, lon: CORRECTED_ENTRY_POINTS.DOBAT.lon },
+    ],
+    /** HANGU→LAJAK (no vertex labels). */
+    M881: [
+        { lat: 32.734191436767574, lon: 70.79595642089843 },
+        { lat: CORRECTED_ENTRY_POINTS.LAJAK.lat, lon: CORRECTED_ENTRY_POINTS.LAJAK.lon },
+    ],
+    /** SULOM / LAJAK from ``CORRECTED_ENTRY_POINTS``; intermediate legs per radar debug (display). */
+    L509: [
+        { lat: CORRECTED_ENTRY_POINTS.SULOM.lat, lon: CORRECTED_ENTRY_POINTS.SULOM.lon },
+        { lat: 31.719697099165483, lon: 73.32327537536621 },
+        { lat: 32.992424413507635, lon: 72.69109115600585 },
+        { lat: 33.57828317815607, lon: 71.94396476745605 },
+        { lat: 33.57828317815607, lon: 71.02442512512206 },
+        { lat: CORRECTED_ENTRY_POINTS.LAJAK.lat, lon: CORRECTED_ENTRY_POINTS.LAJAK.lon },
+    ],
+    /** MERUN–RK–ZB–REGET–BIROS (no per-vertex labels: fixes shown by entry/reference layers). */
+    L750: [
+        { lat: CORRECTED_ENTRY_POINTS.MERUN.lat, lon: CORRECTED_ENTRY_POINTS.MERUN.lon },
+        { lat: 28.690810713334518, lon: 69.86616859436035 },
+        { lat: 29.576901799982245, lon: 68.90246505737305 },
+        { lat: 31.15090293190696, lon: 69.21194648742676 },
+        { lat: CORRECTED_ENTRY_POINTS.BIROS.lat, lon: CORRECTED_ENTRY_POINTS.BIROS.lon },
+    ],
+    /** Short connector VIKIT–RK (no vertex labels). */
+    P628: [
+        { lat: CORRECTED_ENTRY_POINTS.VIKIT.lat, lon: CORRECTED_ENTRY_POINTS.VIKIT.lon },
+        { lat: 28.690810713334518, lon: 69.86616859436035 },
+    ],
+    /** PURPA→PS→HANGU→REGET→ZOHAR→NH→ASSVIB (no vertex labels). */
+    G325: [
+        { lat: CORRECTED_ENTRY_POINTS.PURPA.lat, lon: CORRECTED_ENTRY_POINTS.PURPA.lon },
+        { lat: 34.93481810136275, lon: 72.71749954223633 },
+        { lat: 32.734191436767574, lon: 70.79595642089843 },
+        { lat: 31.15090293190696, lon: 69.21194648742676 },
+        { lat: 29.052161005193536, lon: 67.08258895874023 },
+        { lat: 27.028034251819957, lon: 64.24250011444092 },
+        { lat: CORRECTED_ENTRY_POINTS.ASSVIB.lat, lon: CORRECTED_ENTRY_POINTS.ASSVIB.lon },
+    ],
+};
 
 /**
- * Base Speed for Aircraft Movement
+ * Named PAK fixes for sim / lookups: corrected entries, reference markers, and
+ * airway vertex labels (NONIB, JHANG, …).
  */
-const BASE_SPEED = 0.8; // SVG units per frame
+const WAYPOINT_TABLE = (() => {
+    const t = {};
+    const add = (name, lat, lon) => {
+        if (!name || !Number.isFinite(lat) || !Number.isFinite(lon)) return;
+        const k = String(name).trim().toUpperCase();
+        if (!t[k]) t[k] = { lat, lon };
+    };
+    Object.entries(CORRECTED_ENTRY_POINTS).forEach(([k, v]) => add(k, v.lat, v.lon));
+    FIR_REFERENCE_MARKERS.forEach((m) => add(m.code, m.lat, m.lon));
+    Object.values(AIRWAY_POLYLINES).forEach((poly) => {
+        poly.forEach((v) => {
+            if (v.label) add(v.label, v.lat, v.lon);
+        });
+    });
+    return t;
+})();
+
+function toRad(d) {
+    return d * (Math.PI / 180);
+}
+
+function haversineNm(lat1, lon1, lat2, lon2) {
+    const R = 3440.065;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+/** Initial true-north bearing from (lat1,lon1) toward (lat2,lon2), degrees in [0, 360). */
+function bearingDegTrueNorth(lat1, lon1, lat2, lon2) {
+    const φ1 = toRad(lat1);
+    const φ2 = toRad(lat2);
+    const dλ = toRad(lon2 - lon1);
+    const y = Math.sin(dλ) * Math.cos(φ2);
+    const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(dλ);
+    let br = (Math.atan2(y, x) * 180) / Math.PI;
+    br = (br + 360) % 360;
+    return br;
+}
+
+function parseRouteTokens(routeStr) {
+    if (!routeStr || typeof routeStr !== 'string') return [];
+    return routeStr
+        .toUpperCase()
+        .split(/\s+/)
+        .map((t) => t.trim())
+        .filter((t) => t && t !== 'DCT');
+}
+
+function parseSpeedToKnots(speedField) {
+    if (!speedField || typeof speedField !== 'string') return 450;
+    const s = speedField.trim().toUpperCase();
+    const n = s.match(/^N(\d{3,5})$/);
+    if (n) return parseInt(n[1], 10);
+    const m = s.match(/^M(\d{3})$/);
+    if (m) {
+        const mach = parseInt(m[1], 10) / 1000;
+        return Math.max(200, Math.round((480 * mach) / 0.82));
+    }
+    const k = s.match(/^K(\d{3,5})$/);
+    if (k) return Math.round(parseInt(k[1], 10) / 1.852);
+    return 450;
+}
+
+function flattenAirwayPointsForRouteTokens(tokens) {
+    const pts = [];
+    let entryIdx = -1;
+    for (let i = 0; i < tokens.length; i++) {
+        if (tokens[i] === 'SULOM' || tokens[i] === 'GUGAL' || tokens[i] === 'PURPA') {
+            entryIdx = i;
+            break;
+        }
+    }
+    const start = entryIdx >= 0 ? entryIdx + 1 : 0;
+    const slice = tokens.slice(start);
+    for (const tok of slice) {
+        const list = AIRSPACE_ROUTE_RULES[tok];
+        if (!list) continue;
+        for (const aid of list) {
+            const poly = AIRWAY_POLYLINES[aid];
+            if (!poly) continue;
+            for (const p of poly) {
+                const last = pts[pts.length - 1];
+                if (
+                    last &&
+                    Math.abs(last.lat - p.lat) < 1e-8 &&
+                    Math.abs(last.lon - p.lon) < 1e-8
+                ) {
+                    continue;
+                }
+                pts.push({ lat: p.lat, lon: p.lon });
+            }
+        }
+    }
+    return pts;
+}
+
+function ensureEntryAtStart(points, entryLat, entryLon) {
+    if (!points.length) return [{ lat: entryLat, lon: entryLon }];
+    const distFirst = haversineNm(entryLat, entryLon, points[0].lat, points[0].lon);
+    if (distFirst < 0.5) {
+        const out = points.slice();
+        out[0] = { lat: entryLat, lon: entryLon };
+        return out;
+    }
+    return [{ lat: entryLat, lon: entryLon }, ...points];
+}
+
+function ensureLajakAtEnd(points, tokens) {
+    if (!tokens.includes('LAJAK')) return points;
+    const lj = getResolvedEntryCoordinate('LAJAK');
+    if (!lj) return points;
+    if (!points.length) return [{ lat: lj.lat, lon: lj.lon }];
+    const last = points[points.length - 1];
+    if (haversineNm(last.lat, last.lon, lj.lat, lj.lon) < 0.5) {
+        const out = points.slice();
+        out[out.length - 1] = { lat: lj.lat, lon: lj.lon };
+        return out;
+    }
+    return [...points, { lat: lj.lat, lon: lj.lon }];
+}
+
+const _FALLBACK_SEGMENT_NM = 3.0;
 
 /**
- * Animation Frame Rate
+ * Match route_builder._stretch_single_point_path: ensure non-zero path length for sim.
  */
-const FRAME_RATE = 60; // FPS
+function stretchSinglePointPath(path, tokens) {
+    if (path.length !== 1) return path;
+    const { lat: elat, lon: elon } = path[0];
+    const table = WAYPOINT_TABLE;
+    for (let i = 0; i < tokens.length; i++) {
+        const g = table[tokens[i]];
+        if (!g) continue;
+        const glat = g.lat;
+        const glon = g.lon;
+        const d = haversineNm(elat, elon, glat, glon);
+        if (d < 1e-3) continue;
+        const t = Math.min(1, _FALLBACK_SEGMENT_NM / d);
+        const nlat = elat + (glat - elat) * t;
+        const nlon = elon + (glon - elon) * t;
+        if (haversineNm(elat, elon, nlat, nlon) < 1e-6) continue;
+        return [{ lat: elat, lon: elon }, { lat: nlat, lon: nlon }];
+    }
+    const dlon = _FALLBACK_SEGMENT_NM / 60 / Math.max(0.25, Math.cos(toRad(elat)));
+    return [{ lat: elat, lon: elon }, { lat: elat, lon: elon + dlon }];
+}
+
+function buildSimulatedRoutePath(firEntry, routeStr) {
+    const entry = getResolvedEntryCoordinate(firEntry);
+    if (!entry) return [];
+    const tokens = parseRouteTokens(routeStr);
+    let path = flattenAirwayPointsForRouteTokens(tokens);
+    if (!path.length) {
+        path = [{ lat: entry.lat, lon: entry.lon }];
+    } else {
+        path = ensureEntryAtStart(path, entry.lat, entry.lon);
+        path = ensureLajakAtEnd(path, tokens);
+    }
+    return stretchSinglePointPath(path, tokens);
+}
+
+function cumulativeNmPolyline(points) {
+    const cumulative = [0];
+    let total = 0;
+    for (let i = 1; i < points.length; i++) {
+        total += haversineNm(points[i - 1].lat, points[i - 1].lon, points[i].lat, points[i].lon);
+        cumulative.push(total);
+    }
+    return { cumulative, total };
+}
+
+function interpolateAlongPolyline(points, cumulative, distanceNm) {
+    if (!points.length) return { lat: 0, lon: 0 };
+    if (distanceNm <= 0) return { lat: points[0].lat, lon: points[0].lon };
+    const maxD = cumulative[cumulative.length - 1];
+    if (distanceNm >= maxD) {
+        const p = points[points.length - 1];
+        return { lat: p.lat, lon: p.lon };
+    }
+    let i = 0;
+    while (i < cumulative.length - 1 && cumulative[i + 1] < distanceNm) {
+        i++;
+    }
+    const segStart = cumulative[i];
+    const segEnd = cumulative[i + 1];
+    const t = segEnd > segStart ? (distanceNm - segStart) / (segEnd - segStart) : 0;
+    const a = points[i];
+    const b = points[i + 1];
+    return {
+        lat: a.lat + (b.lat - a.lat) * t,
+        lon: a.lon + (b.lon - a.lon) * t,
+    };
+}
+
+function simulationRouteKey(firEntry, route, speed) {
+    return `${firEntry}|${route || ''}|${speed || ''}`;
+}
+
+function parseEtoUtcDateMs(etoUtcStr) {
+    if (etoUtcStr == null || etoUtcStr === '') return null;
+    const s = String(etoUtcStr).replace(/\D/g, '').padStart(4, '0').slice(-4);
+    if (s.length < 4) return null;
+    const hh = parseInt(s.slice(0, 2), 10);
+    const mm = parseInt(s.slice(2, 4), 10);
+    if (hh > 23 || mm > 59 || Number.isNaN(hh) || Number.isNaN(mm)) return null;
+    const now = new Date();
+    return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hh, mm, 0, 0);
+}
 
 // ===================================================================
 // SECTION 2: COORDINATE CONVERSION UTILITIES
@@ -2537,144 +2873,351 @@ class Aircraft {
         this.departure = data.departure;
         this.destination = data.destination;
         this.fir_entry = data.fir_entry;
-        this.cfl = parseInt(data.cfl); // Flight Level
+        const fl = parseInt(String(data.cfl).replace(/\D/g, ''), 10);
+        this.cfl = Number.isFinite(fl) ? fl : 0;
         this.ssr = data.ssr;
         this.status = data.status;
         this.created_at = new Date(data.created_at);
+        this.route = data.route || '';
+        this.speedField = data.speed || '';
+        this.eto_utc = data.eto_utc;
 
-        // Animation properties
         this.currentX = 0;
         this.currentY = 0;
         this.targetX = 0;
         this.targetY = 0;
-        this.heading = 0; // Rotation angle in degrees
-        this.trail = []; // Trail of positions
+        this.heading = 0;
+        this.trail = [];
         this.maxTrailLength = 10;
 
-        // Speed based on flight level
-        this.speed = this.calculateSpeed();
+        this.groundSpeed = parseSpeedToKnots(this.speedField);
+        this._routeKey = simulationRouteKey(this.fir_entry, this.route, this.speedField);
+        this._pathPoints = [];
+        this._cumulativeNm = [];
+        this._totalPathNm = 0;
+        this._distanceAlongNm = 0;
+        this._simLat = null;
+        this._simLon = null;
+        this._lastHeadingLat = null;
+        this._lastHeadingLon = null;
+        /** True-north bearing (deg) for dead reckoning between server polls; updated when targets move. */
+        this._predictionBearingDeg = null;
+        this._radarDbgAcc = 0;
+        this._radarDbgN = 0;
 
-        // Synthetic track properties
-        this.groundSpeed = this.calculateGroundSpeed();
+        this._serverSim =
+            data.sim_source === 'server' &&
+            Number.isFinite(data.x) &&
+            Number.isFinite(data.y);
+        this.apiConflict = !!data.conflict;
+        this.resolvedPath = Array.isArray(data.resolved_path) ? data.resolved_path : [];
+        this._serverTargetX = Number.isFinite(data.x) ? data.x : 0;
+        this._serverTargetY = Number.isFinite(data.y) ? data.y : 0;
+        this._serverTargetLat = Number.isFinite(data.lat) ? data.lat : null;
+        this._serverTargetLon = Number.isFinite(data.lon) ? data.lon : null;
+        /** Server-sim: lat/lon interpolation (display only). */
+        this._interpPrevLat = null;
+        this._interpPrevLon = null;
+        this._interpT = 1;
+        this._dispLat = null;
+        this._dispLon = null;
 
-        // Initialize position
-        this.initializePosition();
-    }
+        const etoMs = parseEtoUtcDateMs(this.eto_utc);
+        this._etoMs = etoMs;
+        this.simVisible = !SIM_USE_ETO || etoMs == null || Date.now() >= etoMs;
+        if (data.sim_active === false) {
+            this.simVisible = false;
+        }
 
-    /**
-     * Calculate Speed Based on Flight Level
-     * Higher flight levels = faster movement
-     */
-    calculateSpeed() {
-        // Formula: speed = baseSpeed * (flightLevel / 200)
-        const speedMultiplier = this.cfl / 200;
-        return BASE_SPEED * speedMultiplier;
-    }
-
-    /**
-     * Calculate Realistic Ground Speed (in knots)
-     * Based on flight level
-     */
-    calculateGroundSpeed() {
-        // Typical cruise speeds based on FL
-        if (this.cfl >= 350) return 450 + Math.random() * 30; // High altitude jets
-        if (this.cfl >= 250) return 400 + Math.random() * 30; // Medium altitude
-        return 320 + Math.random() * 30; // Lower altitude
-    }
-
-    /**
-     * Initialize Aircraft Position at Entry Point
-     */
-    initializePosition() {
-        const entryCoord = getResolvedEntryCoordinate(this.fir_entry);
-        if (entryCoord) {
-            const pos = geoToSVG(entryCoord.lat, entryCoord.lon);
-            this.currentX = pos.x;
-            this.currentY = pos.y;
-            this.targetX = pos.x;
-            this.targetY = pos.y;
+        if (this._serverSim) {
+            this.currentX = this._serverTargetX;
+            this.currentY = this._serverTargetY;
+            this.targetX = this._serverTargetX;
+            this.targetY = this._serverTargetY;
+            if (this._serverTargetLat != null && this._serverTargetLon != null) {
+                this._simLat = this._serverTargetLat;
+                this._simLon = this._serverTargetLon;
+                this._lastHeadingLat = this._simLat;
+                this._lastHeadingLon = this._simLon;
+                this._interpPrevLat = this._serverTargetLat;
+                this._interpPrevLon = this._serverTargetLon;
+                this._dispLat = this._serverTargetLat;
+                this._dispLon = this._serverTargetLon;
+                this._interpT = 1;
+            }
+            this.trail = [{ x: this.currentX, y: this.currentY }];
         } else {
-            // Default center position
-            this.currentX = 450;
-            this.currentY = 325;
-            this.targetX = 450;
-            this.targetY = 325;
+            this._rebuildPath();
+            this.initializePosition();
         }
-
-        // Initialize trail
-        this.trail.push({ x: this.currentX, y: this.currentY });
     }
 
-    /**
-     * Update Aircraft Position (Smooth Animation)
-     * @param {number} deltaTime - Time since last frame
-     */
-    update(deltaTime) {
-        // Calculate elapsed time since creation
-        const now = new Date();
-        const elapsedSeconds = (now - this.created_at) / 1000;
-        const totalJourneyTime = 2400; // 40 minutes in seconds
-
-        // Progress from 0 to 1
-        const progress = Math.min(elapsedSeconds / totalJourneyTime, 1);
-
-        // Apply easing for smooth movement
-        const easedProgress = Easing.easeInOutCubic(progress);
-
-        // Calculate target position based on progress
-        const entryCoord = getResolvedEntryCoordinate(this.fir_entry);
-        if (entryCoord) {
-            const entry = geoToSVG(entryCoord.lat, entryCoord.lon);
-            const center = { x: 450, y: 325 };
-
-            if (easedProgress < 0.5) {
-                // First half: Entry point to center
-                const t = easedProgress * 2;
-                this.targetX = entry.x + (center.x - entry.x) * t;
-                this.targetY = entry.y + (center.y - entry.y) * t;
+    mergeServerFields(data) {
+        if (data.status !== undefined) {
+            this.status = data.status;
+        }
+        if (data.callsign) this.callsign = data.callsign;
+        if (data.aircraft_type) this.aircraft_type = data.aircraft_type;
+        if (data.departure) this.departure = data.departure;
+        if (data.destination) this.destination = data.destination;
+        if (data.ssr) this.ssr = data.ssr;
+        if (data.fir_entry) this.fir_entry = data.fir_entry;
+        const fl = parseInt(String(data.cfl).replace(/\D/g, ''), 10);
+        if (Number.isFinite(fl)) this.cfl = fl;
+        if (data.route !== undefined) {
+            this.route = data.route || '';
+        }
+        if (data.speed !== undefined) {
+            this.speedField = data.speed || '';
+        }
+        if (data.eto_utc !== undefined) {
+            this.eto_utc = data.eto_utc;
+        }
+        this.groundSpeed = parseSpeedToKnots(this.speedField);
+        const etoMs = parseEtoUtcDateMs(this.eto_utc);
+        this._etoMs = etoMs;
+        if (!SIM_USE_ETO || etoMs == null || Date.now() >= etoMs) {
+            this.simVisible = true;
+        }
+        if (data.sim_active === false) {
+            this.simVisible = false;
+        } else if (data.sim_active === true) {
+            this.simVisible = true;
+        }
+        if (data.sim_source === 'server' && Number.isFinite(data.lat) && Number.isFinite(data.lon)) {
+            this._serverSim = true;
+            this.apiConflict = !!data.conflict;
+            if (Array.isArray(data.resolved_path)) {
+                this.resolvedPath = data.resolved_path;
+            }
+            const nlat = data.lat;
+            const nlon = data.lon;
+            const prevSrvLat = this._serverTargetLat;
+            const prevSrvLon = this._serverTargetLon;
+            const moved =
+                prevSrvLat == null ||
+                prevSrvLon == null ||
+                Math.abs(nlat - prevSrvLat) + Math.abs(nlon - prevSrvLon) > 1e-9;
+            if (moved) {
+                const baseLat = this._dispLat != null ? this._dispLat : this._simLat;
+                const baseLon = this._dispLon != null ? this._dispLon : this._simLon;
+                if (baseLat != null && baseLon != null) {
+                    this._interpPrevLat = baseLat;
+                    this._interpPrevLon = baseLon;
+                } else {
+                    this._interpPrevLat = nlat;
+                    this._interpPrevLon = nlon;
+                }
+                this._interpT = 0;
+                if (prevSrvLat != null && prevSrvLon != null) {
+                    const stepNm = haversineNm(prevSrvLat, prevSrvLon, nlat, nlon);
+                    if (stepNm > 1e-4) {
+                        this._predictionBearingDeg = bearingDegTrueNorth(
+                            prevSrvLat,
+                            prevSrvLon,
+                            nlat,
+                            nlon
+                        );
+                    }
+                }
+            }
+            this._serverTargetLat = nlat;
+            this._serverTargetLon = nlon;
+            if (Number.isFinite(data.x) && Number.isFinite(data.y)) {
+                this._serverTargetX = data.x;
+                this._serverTargetY = data.y;
             } else {
-                // Second half: Center to exit point (opposite side)
-                const t = (easedProgress - 0.5) * 2;
-                const exitX = 900 - entry.x;
-                const exitY = 650 - entry.y;
-                this.targetX = center.x + (exitX - center.x) * t;
-                this.targetY = center.y + (exitY - center.y) * t;
+                const svg = geoToSVG(nlat, nlon);
+                this._serverTargetX = svg.x;
+                this._serverTargetY = svg.y;
             }
+            this.targetX = this._serverTargetX;
+            this.targetY = this._serverTargetY;
         }
-
-        // Smooth interpolation to target position
-        const dx = this.targetX - this.currentX;
-        const dy = this.targetY - this.currentY;
-
-        // Move towards target with speed-based interpolation
-        this.currentX += dx * this.speed * deltaTime * 0.05;
-        this.currentY += dy * this.speed * deltaTime * 0.05;
-
-        // Calculate heading (rotation angle)
-        if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
-            this.heading = Math.atan2(dy, dx) * (180 / Math.PI);
-        }
-
-        // Update trail
-        if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
-            this.trail.push({ x: this.currentX, y: this.currentY });
-            if (this.trail.length > this.maxTrailLength) {
-                this.trail.shift();
-            }
+        const newKey = simulationRouteKey(this.fir_entry, this.route, this.speedField);
+        if (!this._serverSim && newKey !== this._routeKey) {
+            this._routeKey = newKey;
+            this._rebuildPath();
+            this._distanceAlongNm = 0;
+            this.initializePosition();
         }
     }
 
-    /**
-     * Get Current Sector
-     */
-    getCurrentSector() {
-        // Approximate lat from Y coordinate (inverse of geoToSVG)
-        const svgHeight = 650;
-        const padding = 50;
-        const latMin = 23.0, latMax = 37.5;
-        const normalizedY = (svgHeight - padding - this.currentY) / (svgHeight - 2 * padding);
-        const lat = latMin + normalizedY * (latMax - latMin);
+    _rebuildPath() {
+        this._pathPoints = buildSimulatedRoutePath(this.fir_entry, this.route);
+        const { cumulative, total } = cumulativeNmPolyline(this._pathPoints);
+        this._cumulativeNm = cumulative;
+        this._totalPathNm = total;
+    }
 
+    initializePosition() {
+        if (this._pathPoints.length) {
+            this._simLat = this._pathPoints[0].lat;
+            this._simLon = this._pathPoints[0].lon;
+        } else {
+            const entryCoord = getResolvedEntryCoordinate(this.fir_entry);
+            if (entryCoord) {
+                this._simLat = entryCoord.lat;
+                this._simLon = entryCoord.lon;
+            } else {
+                this._simLat = 30.5;
+                this._simLon = 70.0;
+            }
+        }
+        const pos = geoToSVG(this._simLat, this._simLon);
+        this.currentX = pos.x;
+        this.currentY = pos.y;
+        this.targetX = pos.x;
+        this.targetY = pos.y;
+        this.trail = [{ x: this.currentX, y: this.currentY }];
+        this._lastHeadingLat = this._simLat;
+        this._lastHeadingLon = this._simLon;
+    }
+
+    /**
+     * @param {number} deltaTimeNorm — legacy normalized frame factor (~1 per 16.67ms)
+     * @param {number} dtSec — wall-clock seconds since last frame
+     */
+    update(deltaTimeNorm, dtSec) {
+        if (SIM_USE_ETO && this._etoMs != null && Date.now() < this._etoMs) {
+            this.simVisible = false;
+            return;
+        }
+        if (this.simVisible !== false && !this._serverSim) {
+            this.simVisible = true;
+        }
+
+        const dt = Number.isFinite(dtSec) && dtSec > 0 ? dtSec : Math.max(0.001, (deltaTimeNorm * 16.67) / 1000);
+
+        if (this._serverSim) {
+            if (this.simVisible === false) {
+                return;
+            }
+            const prevX = this.currentX;
+            const prevY = this.currentY;
+            const osl = this._simLat;
+            const oso = this._simLon;
+            const seg = getInterpSegmentSec();
+            const demo = getDemoSpeedMultiplier();
+
+            if (
+                this._interpPrevLat != null &&
+                this._interpPrevLon != null &&
+                this._serverTargetLat != null &&
+                this._serverTargetLon != null
+            ) {
+                this._interpT = Math.min(1, this._interpT + (dt / seg) * demo);
+                this._dispLat = lerp(this._interpPrevLat, this._serverTargetLat, this._interpT);
+                this._dispLon = lerp(this._interpPrevLon, this._serverTargetLon, this._interpT);
+            } else if (this._serverTargetLat != null && this._serverTargetLon != null) {
+                this._dispLat = this._serverTargetLat;
+                this._dispLon = this._serverTargetLon;
+                this._interpT = 1;
+            }
+
+            if (this._dispLat != null && this._dispLon != null) {
+                this._simLat = this._dispLat;
+                this._simLon = this._dispLon;
+                const pos = geoToSVG(this._dispLat, this._dispLon);
+                this.currentX = pos.x;
+                this.currentY = pos.y;
+            }
+            this.targetX = this._serverTargetX;
+            this.targetY = this._serverTargetY;
+
+            if (
+                osl != null &&
+                oso != null &&
+                this._simLat != null &&
+                this._simLon != null &&
+                Math.abs(this._simLat - osl) + Math.abs(this._simLon - oso) > 1e-7
+            ) {
+                const svgA = geoToSVG(osl, oso);
+                const svgB = geoToSVG(this._simLat, this._simLon);
+                const dx = svgB.x - svgA.x;
+                const dy = svgB.y - svgA.y;
+                if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05) {
+                    this.heading = Math.atan2(dy, dx) * (180 / Math.PI);
+                }
+            }
+
+            if (getRadarDebugLog()) {
+                this._radarDbgAcc += dt;
+                this._radarDbgN += 1;
+                if (this._radarDbgAcc >= 2 && this._simLat != null && this._serverTargetLat != null) {
+                    const errNm = haversineNm(
+                        this._simLat,
+                        this._simLon,
+                        this._serverTargetLat,
+                        this._serverTargetLon
+                    );
+                    console.log(
+                        '[radar sim]',
+                        this.callsign,
+                        'dt_avg',
+                        (this._radarDbgAcc / this._radarDbgN).toFixed(4),
+                        'nm_to_server',
+                        errNm.toFixed(3),
+                        'interpT',
+                        this._interpT.toFixed(3)
+                    );
+                    this._radarDbgAcc = 0;
+                    this._radarDbgN = 0;
+                }
+            }
+
+            if (Math.abs(this.currentX - prevX) > 0.5 || Math.abs(this.currentY - prevY) > 0.5) {
+                this.trail.push({ x: prevX, y: prevY });
+                if (this.trail.length > this.maxTrailLength) this.trail.shift();
+            }
+            return;
+        }
+
+        const m = getAnimationSpeedMultiplier();
+        let deltaNm = (this.groundSpeed / 3600) * dt;
+        deltaNm *= m;
+        this._distanceAlongNm = Math.min(this._totalPathNm, this._distanceAlongNm + deltaNm);
+
+        const geo = interpolateAlongPolyline(
+            this._pathPoints,
+            this._cumulativeNm,
+            this._distanceAlongNm
+        );
+        this._simLat = geo.lat;
+        this._simLon = geo.lon;
+
+        const pos = geoToSVG(this._simLat, this._simLon);
+        this.targetX = pos.x;
+        this.targetY = pos.y;
+
+        const smooth = Math.min(1, 12 * dt * m);
+        this.currentX += (this.targetX - this.currentX) * smooth;
+        this.currentY += (this.targetY - this.currentY) * smooth;
+
+        const dLat = this._simLat - this._lastHeadingLat;
+        const dLon = this._simLon - this._lastHeadingLon;
+        if (Math.abs(dLat) + Math.abs(dLon) > 1e-7) {
+            const svgA = geoToSVG(this._lastHeadingLat, this._lastHeadingLon);
+            const svgB = geoToSVG(this._simLat, this._simLon);
+            const dx = svgB.x - svgA.x;
+            const dy = svgB.y - svgA.y;
+            if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05) {
+                this.heading = Math.atan2(dy, dx) * (180 / Math.PI);
+            }
+            this._lastHeadingLat = this._simLat;
+            this._lastHeadingLon = this._simLon;
+        }
+
+        const tdx = this.targetX - this.currentX;
+        const tdy = this.targetY - this.currentY;
+        if (Math.abs(tdx) > 0.5 || Math.abs(tdy) > 0.5) {
+            this.trail.push({ x: this.currentX, y: this.currentY });
+            if (this.trail.length > this.maxTrailLength) this.trail.shift();
+        }
+    }
+
+    getCurrentSector() {
+        const lat = this._simLat != null ? this._simLat : radarUnprojectToLatLon(this.currentX, this.currentY).lat;
         if (lat >= FIR_SECTORS.NORTH.minLat) return 'NORTH';
         if (lat >= FIR_SECTORS.CENTRAL.minLat) return 'CENTRAL';
         return 'SOUTH';
@@ -2690,35 +3233,41 @@ class ConflictDetector {
         this.conflicts = [];
     }
 
-    /**
-     * Calculate Distance Between Two Aircraft
-     */
-    getDistance(aircraft1, aircraft2) {
-        const dx = aircraft1.currentX - aircraft2.currentX;
-        const dy = aircraft1.currentY - aircraft2.currentY;
-        return Math.sqrt(dx * dx + dy * dy);
+    _latLon(ac) {
+        if (ac._simLat != null && ac._simLon != null) {
+            return { lat: ac._simLat, lon: ac._simLon };
+        }
+        return radarUnprojectToLatLon(ac.currentX, ac.currentY);
     }
 
-    /**
-     * Detect Conflicts Between All Aircraft
-     */
+    distanceNm(aircraft1, aircraft2) {
+        const a = this._latLon(aircraft1);
+        const b = this._latLon(aircraft2);
+        return haversineNm(a.lat, a.lon, b.lat, b.lon);
+    }
+
+    sameFlightLevel(a, b) {
+        if (!Number.isFinite(a.cfl) || !Number.isFinite(b.cfl)) return false;
+        if (a.cfl <= 0 || b.cfl <= 0) return false;
+        return a.cfl === b.cfl;
+    }
+
     detectConflicts(aircraftList) {
         this.conflicts = [];
-
-        for (let i = 0; i < aircraftList.length; i++) {
-            for (let j = i + 1; j < aircraftList.length; j++) {
-                const distance = this.getDistance(aircraftList[i], aircraftList[j]);
-
-                if (distance < CONFLICT_THRESHOLD) {
+        const visible = aircraftList.filter((ac) => ac.simVisible !== false);
+        for (let i = 0; i < visible.length; i++) {
+            for (let j = i + 1; j < visible.length; j++) {
+                const nm = this.distanceNm(visible[i], visible[j]);
+                if (nm < SEPARATION_THRESHOLD_NM && this.sameFlightLevel(visible[i], visible[j])) {
                     this.conflicts.push({
-                        aircraft1: aircraftList[i],
-                        aircraft2: aircraftList[j],
-                        distance: distance
+                        aircraft1: visible[i],
+                        aircraft2: visible[j],
+                        distance: nm,
+                        distanceNm: nm,
                     });
                 }
             }
         }
-
         return this.conflicts;
     }
 }
@@ -2768,7 +3317,7 @@ class RadarRenderer {
         label2.setAttribute('y', '345');
         label2.setAttribute('text-anchor', 'middle');
         label2.setAttribute('font-size', '14');
-        label2.textContent = '(OPKR)';
+        label2.textContent = ' ';
 
         firGroup.appendChild(label1);
         firGroup.appendChild(label2);
@@ -2784,8 +3333,8 @@ class RadarRenderer {
         sectorsGroup.innerHTML = '';
         this.activeSectors.clear();
 
-        // Determine active sectors
-        activeAircraft.forEach(aircraft => {
+        activeAircraft.forEach((aircraft) => {
+            if (aircraft.simVisible === false) return;
             this.activeSectors.add(aircraft.getCurrentSector());
         });
 
@@ -2813,6 +3362,69 @@ class RadarRenderer {
     /**
      * Render Aircraft with Rotation and Labels
      */
+    renderAirways() {
+        const group = document.getElementById('airwaysGroup');
+        if (!group) return;
+        group.innerHTML = '';
+
+        Object.entries(AIRWAY_POLYLINES).forEach(([id, verts]) => {
+            if (!verts || verts.length < 2) return;
+            const pts = verts.map((v) => {
+                const p = geoToSVG(v.lat, v.lon);
+                return `${p.x},${p.y}`;
+            });
+            const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+            poly.setAttribute('class', 'airway-polyline');
+            poly.setAttribute('points', pts.join(' '));
+            group.appendChild(poly);
+
+            let midIdx = Math.floor(verts.length / 2);
+            const mid = verts[midIdx];
+            const mp = geoToSVG(mid.lat, mid.lon);
+            const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            label.setAttribute('class', 'airway-label');
+            label.setAttribute('x', mp.x + 4);
+            label.setAttribute('y', mp.y - 4);
+            label.textContent = id;
+            group.appendChild(label);
+
+            verts.forEach((v) => {
+                if (!v.label) return;
+                const lp = geoToSVG(v.lat, v.lon);
+                const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                t.setAttribute('class', 'airway-waypoint-label');
+                t.setAttribute('x', lp.x);
+                t.setAttribute('y', lp.y - 10);
+                t.setAttribute('text-anchor', 'middle');
+                t.textContent = v.label;
+                group.appendChild(t);
+            });
+        });
+    }
+
+    /**
+     * Draw server-resolved track routes (dotted polylines) in #trackRoutesGroup.
+     */
+    renderTrackRoutes(aircraftList) {
+        const group = document.getElementById('trackRoutesGroup');
+        if (!group) return;
+        group.innerHTML = '';
+        aircraftList.forEach((ac) => {
+            if (ac.simVisible === false || !ac.resolvedPath || ac.resolvedPath.length < 2) return;
+            const pts = ac.resolvedPath
+                .map((p) => {
+                    const s = geoToSVG(p.lat, p.lon);
+                    return `${s.x},${s.y}`;
+                })
+                .join(' ');
+            const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+            poly.setAttribute('class', 'track-route-polyline');
+            poly.setAttribute('points', pts);
+            poly.setAttribute('fill', 'none');
+            group.appendChild(poly);
+        });
+    }
+
     renderAircraft(aircraftList) {
         const container = document.getElementById('aircraftContainer');
         if (!container) return;
@@ -2820,6 +3432,7 @@ class RadarRenderer {
         container.innerHTML = '';
 
         aircraftList.forEach(aircraft => {
+            if (aircraft.simVisible === false) return;
             const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             group.setAttribute('class', 'aircraft-group');
             group.setAttribute('id', `aircraft-${aircraft.id}`);
@@ -2841,16 +3454,16 @@ class RadarRenderer {
                 group.appendChild(trail);
             }
 
-            // Aircraft icon (rotating triangle)
-            const icon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-            icon.setAttribute('class', 'aircraft-symbol');
-            icon.setAttribute('points', '0,-12 -8,8 8,8');
-            icon.setAttribute('fill', 'var(--radar-red)');
-            icon.setAttribute('stroke', 'var(--radar-red)');
-            icon.setAttribute('stroke-width', '2');
+            // Aircraft icon: compact arrowhead (nose +X before rotate(heading+90))
+            const icon = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            icon.setAttribute(
+                'class',
+                aircraft.apiConflict ? 'aircraft-symbol aircraft-conflict' : 'aircraft-symbol'
+            );
+            icon.setAttribute('d', 'M -3.5 4 L 0 -6.5 L 3.5 4 Z');
+            icon.setAttribute('stroke-linejoin', 'miter');
             icon.setAttribute('transform',
                 `translate(${aircraft.currentX}, ${aircraft.currentY}) rotate(${aircraft.heading + 90})`);
-            icon.setAttribute('filter', 'drop-shadow(0 0 8px var(--radar-red))');
 
             group.appendChild(icon);
 
@@ -2954,7 +3567,7 @@ class RadarRenderer {
             alertText.setAttribute('font-weight', '700');
             alertText.setAttribute('text-anchor', 'middle');
             alertText.setAttribute('class', 'conflict-alert');
-            alertText.textContent = 'CONFLICT ALERT';
+            alertText.textContent = `SEP ALERT <${SEPARATION_THRESHOLD_NM} NM | same FL${a1.cfl}`;
 
             conflictGroup.appendChild(alertText);
 
@@ -2982,24 +3595,18 @@ class RadarRenderer {
 
         entryGroup.innerHTML = '';
 
-        const labelKeys = new Set([
-            ...Object.keys(CORRECTED_ENTRY_POINTS),
-            ...Object.keys(ENTRY_POINTS),
-        ]);
+        const labelKeys = new Set([...Object.keys(CORRECTED_ENTRY_POINTS)]);
         labelKeys.forEach((name) => {
             const resolved = getResolvedEntryCoordinate(name);
             if (!resolved) return;
             const pos = geoToSVG(resolved.lat, resolved.lon);
 
-            // Entry point circle
+            // Entry point circle (size + color from CSS: small, translucent amber)
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.setAttribute('class', 'entry-point');
             circle.setAttribute('cx', pos.x);
             circle.setAttribute('cy', pos.y);
-            circle.setAttribute('r', '5');
-            circle.setAttribute('fill', 'var(--radar-amber)');
-            circle.setAttribute('stroke', 'var(--radar-amber)');
-            circle.setAttribute('stroke-width', '2');
+            circle.setAttribute('r', '3');
 
             entryGroup.appendChild(circle);
 
@@ -3007,9 +3614,8 @@ class RadarRenderer {
             const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             label.setAttribute('class', 'entry-label');
             label.setAttribute('x', pos.x);
-            label.setAttribute('y', pos.y - 10);
+            label.setAttribute('y', pos.y - 8);
             label.setAttribute('text-anchor', 'middle');
-            label.setAttribute('fill', 'var(--radar-amber)');
             label.setAttribute('font-size', '10');
             label.setAttribute('font-weight', '600');
             label.textContent = name;
@@ -3034,15 +3640,15 @@ class RadarRenderer {
             circle.setAttribute('class', 'fir-reference-point');
             circle.setAttribute('cx', pos.x);
             circle.setAttribute('cy', pos.y);
-            circle.setAttribute('r', '5');
+            circle.setAttribute('r', '3');
             group.appendChild(circle);
 
             const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             label.setAttribute('class', 'fir-reference-label');
             label.setAttribute('x', pos.x);
-            label.setAttribute('y', pos.y - 10);
+            label.setAttribute('y', pos.y - 8);
             label.setAttribute('text-anchor', 'middle');
-            label.textContent = m.code;
+            label.textContent = m.displayName || m.code;
             group.appendChild(label);
         });
     }
@@ -3067,6 +3673,7 @@ class RadarEngine {
     init(svgElement) {
         this.renderer = new RadarRenderer(svgElement);
         this.renderer.renderFIRBoundary();
+        this.renderer.renderAirways();
         this.renderer.renderEntryPoints();
         this.renderer.renderReferenceMarkers();
         this.startAnimationLoop();
@@ -3087,23 +3694,29 @@ class RadarEngine {
         if (!this.isRunning) return;
 
         const currentTime = performance.now();
-        const deltaTime = (currentTime - this.lastFrameTime) / 16.67; // Normalize to 60fps
+        const prev = this.lastFrameTime;
         this.lastFrameTime = currentTime;
+        const deltaTime = (currentTime - prev) / 16.67;
+        const dtSec = (currentTime - prev) / 1000;
 
-        // Update all aircraft positions
-        this.aircraftList.forEach(aircraft => {
-            aircraft.update(deltaTime);
+        this.aircraftList.forEach((aircraft) => {
+            aircraft.update(deltaTime, dtSec);
         });
 
-        // Detect conflicts
-        const conflicts = this.renderer.conflictDetector.detectConflicts(this.aircraftList);
+        const visible = this.aircraftList.filter((ac) => ac.simVisible !== false);
+        const serverOnly =
+            visible.length > 0 && visible.every((ac) => ac._serverSim);
+        const conflicts = serverOnly
+            ? []
+            : this.renderer.conflictDetector.detectConflicts(this.aircraftList);
 
-        // Render everything
+        this.syncConflictAlerts(conflicts);
+
         this.renderer.renderSectors(this.aircraftList);
+        this.renderer.renderTrackRoutes(this.aircraftList);
         this.renderer.renderAircraft(this.aircraftList);
         this.renderer.renderConflicts(conflicts);
 
-        // Display conflict alerts
         if (conflicts.length > 0) {
             this.showConflictWarning(conflicts);
         }
@@ -3116,34 +3729,65 @@ class RadarEngine {
      * Update Aircraft Data from Server
      */
     updateAircraftData(data) {
-        // Create Aircraft objects
-        const newAircraftList = data.map(ac => {
-            // Check if aircraft already exists
-            const existing = this.aircraftList.find(a => a.id === ac.id);
+        this.aircraftList = data.map((ac) => {
+            const existing = this.aircraftList.find((a) => a.id === ac.id);
             if (existing) {
-                // Update existing aircraft data (but keep smooth position)
-                existing.status = ac.status;
+                existing.mergeServerFields(ac);
                 return existing;
-            } else {
-                // Create new aircraft
-                return new Aircraft(ac);
             }
+            return new Aircraft(ac);
         });
-
-        this.aircraftList = newAircraftList;
     }
 
     /**
-     * Show Conflict Warning
+     * Apply slim Socket.IO rows; unknown ids trigger a one-time HTTP hydration (see ``fetchRadarHydration``).
      */
-    showConflictWarning(conflicts) {
-        conflicts.forEach(conflict => {
-            const key = `${conflict.aircraft1.id}-${conflict.aircraft2.id}`;
-            if (!this.processedAlerts.includes(key)) {
-                console.warn('CONFLICT DETECTED:', conflict.aircraft1.callsign, 'vs', conflict.aircraft2.callsign);
-                this.processedAlerts.push(key);
+    applySocketTrackUpdates(tracks) {
+        if (!Array.isArray(tracks) || tracks.length === 0) {
+            return;
+        }
+        const existingIds = new Set(this.aircraftList.map((a) => a.id));
+        for (let i = 0; i < tracks.length; i++) {
+            if (!existingIds.has(tracks[i].id)) {
+                if (typeof window.fetchRadarHydration === 'function') {
+                    window.fetchRadarHydration();
+                }
+                return;
+            }
+        }
+        tracks.forEach((t) => {
+            const row = Object.assign({ sim_source: 'server' }, t);
+            const existing = this.aircraftList.find((a) => a.id === t.id);
+            if (existing) {
+                existing.mergeServerFields(row);
+            }
+        });
+    }
 
-                // Play alert sound
+    syncConflictAlerts(conflicts) {
+        const active = new Set();
+        conflicts.forEach((c) => {
+            const a = Math.min(c.aircraft1.id, c.aircraft2.id);
+            const b = Math.max(c.aircraft1.id, c.aircraft2.id);
+            active.add(`${a}-${b}`);
+        });
+        this.processedAlerts = this.processedAlerts.filter((key) => active.has(key));
+    }
+
+    showConflictWarning(conflicts) {
+        conflicts.forEach((conflict) => {
+            const a = Math.min(conflict.aircraft1.id, conflict.aircraft2.id);
+            const b = Math.max(conflict.aircraft1.id, conflict.aircraft2.id);
+            const key = `${a}-${b}`;
+            if (!this.processedAlerts.includes(key)) {
+                console.warn(
+                    'SEPARATION ALERT:',
+                    conflict.aircraft1.callsign,
+                    'vs',
+                    conflict.aircraft2.callsign,
+                    `~${conflict.distanceNm.toFixed(1)} NM FL${conflict.aircraft1.cfl}`
+                );
+                this.processedAlerts.push(key);
                 if (window.playAlertSound) {
                     window.playAlertSound();
                 }

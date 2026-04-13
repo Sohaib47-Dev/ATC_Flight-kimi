@@ -27,6 +27,7 @@ class AppFactoryTests(unittest.TestCase):
         self.assertIn('/admin/dashboard', rules)
         self.assertIn('/atc/dashboard', rules)
         self.assertIn('/defense/dashboard', rules)
+        self.assertIn('/atc/deactivate-track/<int:track_id>', rules)
         self.assertIn('/api/defense/tracks', rules)
 
 

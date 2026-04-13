@@ -109,6 +109,10 @@ class TrackData(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime, nullable=True)
 
+    #: Last server-side radar simulation integration time (UTC naive).
+    last_simulated_at = db.Column(db.DateTime, nullable=True)
+
+    #: JSON: server sim ``{lat, lon, along_nm, path_hash, x, y}`` (see simulation_service).
     current_position = db.Column(db.Text, nullable=True)
 
     def set_position(self, x, y):
@@ -118,6 +122,11 @@ class TrackData(db.Model):
         if self.current_position:
             return json.loads(self.current_position)
         return None
+
+    @property
+    def is_active(self):
+        """True when this track is still active (shown on defense radar when transferred)."""
+        return (self.status or '').lower() == 'active'
 
     def to_dict(self):
         return {
@@ -134,10 +143,12 @@ class TrackData(db.Model):
             'cfl': self.cfl,
             'ssr': self.ssr,
             'status': self.status,
+            'is_active': self.is_active,
             'sent_to_defense': self.sent_to_defense,
             'sent_at': self.sent_at.isoformat() if self.sent_at else None,
             'created_at': self.created_at.isoformat(),
             'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'end_time': self.completed_at.isoformat() if self.completed_at else None,
             'position': self.get_position()
         }
 
@@ -192,6 +203,9 @@ def init_db(app):
     """Initialize the database with default admin user"""
     with app.app_context():
         db.create_all()
+        from app.services.simulation_service import ensure_track_last_simulated_column
+
+        ensure_track_last_simulated_column(app)
 
         admin = User.query.filter_by(username='admin').first()
         if not admin:

@@ -7,11 +7,39 @@ import re
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
-# Pakistan FIR Entry Points
+# Pakistan FIR entry fixes (canonical names). Order in this list does **not**
+# determine which entry is chosen; :meth:`_extract_fir_entry` walks **route
+# tokens** in sequence and returns the first token that appears here.
 PAKISTAN_FIR_ENTRY_POINTS = [
     'SULOM', 'MERUN', 'VIKIT', 'GUGAL', 'PURPA', 'BIROS',
-    'DODAT', 'SIRKA', 'TELEM', 'REGET',
+    'DOBAT', 'SIRKA', 'TELEM', 'REGET',
+    'LAJAK', 'ASSVIB',
 ]
+
+# Field 15: speed/level as one token after the hyphen (e.g. N0450F350, M082F290).
+# N/K: tolerate 3–5 TAS digits (non-ICAO filings like N01220F370 still parse).
+# M: keep exactly 3 digits before level so ``M881`` airways are not read as Mach.
+# Do not use a global ``M\\d{3}`` speed scan — airway identifiers like M881 match that.
+_FIELD15_SPEED_LEVEL_RE = re.compile(
+    r"-((?:N|K)\d{3,5}[FAWS]\d{3,4}|M\d{3}[FAWS]\d{3,4})\b"
+)
+_AERODROME_TIME_RE = re.compile(r"-([A-Z]{4})(\d{4})(?=\s|\)|-|$)")
+
+
+def _speed_from_field15_speed_level_token(token: str) -> Optional[str]:
+    """Return speed portion (N0450, N01220, M082, K0850) from a combined speed/level token."""
+    if not token:
+        return None
+    m = re.match(r"^M(\d{3})([FAWS]\d{3,4})$", token)
+    if m:
+        return f"M{m.group(1)}"
+    m = re.match(r"^([NK])(\d{3,5})([FAWS]\d{3,4})$", token)
+    if not m:
+        return None
+    kind, digits = m.group(1), m.group(2)
+    if len(digits) < 3 or len(digits) > 5:
+        return None
+    return f"{kind}{digits}"
 
 
 @dataclass
@@ -81,7 +109,17 @@ class FlightPlanParser:
         # Convert to uppercase
         normalized = normalized.upper()
         return normalized
-    
+
+    def _route_fallback_between_aerodromes(self, normalized: str) -> str:
+        """
+        When speed/level regexes miss (odd TAS width, spacing), take field 15 as the
+        segment between the first and second ``-ICAO####`` departure/destination blocks.
+        """
+        matches = list(_AERODROME_TIME_RE.finditer(normalized))
+        if len(matches) < 2:
+            return ""
+        return normalized[matches[0].end() : matches[1].start()].strip()
+
     def _extract_candidates(self, normalized: str) -> Dict:
         """
         Layer 1: Regex Candidate Extraction
@@ -105,9 +143,12 @@ class FlightPlanParser:
         type_matches = re.findall(r'-([A-Z0-9]{2,4})/[A-Z]', normalized)
         candidates['aircraft_types'].extend(type_matches)
         
-        # Extract speed candidates (N followed by 4 digits or M followed by 3 digits)
-        speed_matches = re.findall(r'\b(N\d{4}|M\d{3}|K\d{4})\b', normalized)
-        candidates['speeds'].extend(speed_matches)
+        # Speed from field-15 combined token only (avoids M### airway vs Mach ambiguity).
+        for m in _FIELD15_SPEED_LEVEL_RE.finditer(normalized):
+            sp = _speed_from_field15_speed_level_token(m.group(1))
+            if sp:
+                candidates["speeds"].append(sp)
+                break
         
         # Extract all aerodrome + time pairs (4-letter ICAO + 4-digit time)
         # Look for patterns like OPLA2300, OPKC0500
@@ -116,15 +157,20 @@ class FlightPlanParser:
         
         # Extract route string (everything between aircraft info and destination)
         # Route typically starts after speed/level info
-        route_match = re.search(r'-[NMK]\d{3,4}[FAWS]\d{3,4}\s+(.+?)(?:\s+-|$)', normalized)
+        route_match = re.search(
+            r"-((?:N|K)\d{3,5}[FAWS]\d{3,4}|M\d{3}[FAWS]\d{3,4})\s+(.+?)(?:\s+-|$)",
+            normalized,
+        )
         if route_match:
-            candidates['route'] = route_match.group(1).strip()
+            candidates["route"] = route_match.group(2).strip()
         else:
             # Alternative: extract between aircraft type and first aerodrome
             route_alt = re.search(r'/[A-Z]\s+(.+?)(?:\s+[A-Z]{4}\d{4})', normalized)
             if route_alt:
                 candidates['route'] = route_alt.group(1).strip()
-        
+        if not candidates["route"]:
+            candidates["route"] = self._route_fallback_between_aerodromes(normalized)
+
         return candidates
     
     def _validate_and_select(self, normalized: str, candidates: Dict) -> Optional[ParsedFlightPlan]:
@@ -254,17 +300,32 @@ class FlightPlanParser:
             destination = valid_pairs[1][0]
         
         return departure, destination
-    
-    def _extract_fir_entry(self, normalized: str, candidates: Dict) -> Optional[str]:
+
+    def _route_tokens(self, route: str) -> List[str]:
+        """Uppercase tokens from the route field; skip ``DCT``."""
+        if not route or not str(route).strip():
+            return []
+        return [t for t in str(route).strip().upper().split() if t and t != "DCT"]
+
+    def _extract_fir_entry(self, _normalized: str, candidates: Dict) -> Optional[str]:
         """
-        Extract Pakistan FIR entry point
-        Match against hardcoded list, first match only
+        First Pakistan FIR entry fix in **route token order** (speed/level line only).
+
+        ``PAKISTAN_FIR_ENTRY_POINTS`` is the allowed-name set only; the static list
+        order does not select the entry. There is no whole-message substring pass,
+        so fixes mentioned only outside the route cannot override the filed sequence.
         """
-        # Check for Pakistan FIR entry points in the route
-        for entry_point in PAKISTAN_FIR_ENTRY_POINTS:
-            if entry_point in normalized:
-                return entry_point
-        
+        fir_set = frozenset(PAKISTAN_FIR_ENTRY_POINTS)
+
+        def _canonical_fir_token(t: str) -> str:
+            if t == "DODAT":
+                return "DOBAT"
+            return t
+
+        for tok in self._route_tokens(candidates.get("route") or ""):
+            ctok = _canonical_fir_token(tok)
+            if ctok in fir_set:
+                return ctok
         return None
     
     def _extract_speed(self, normalized: str, candidates: Dict) -> Optional[str]:
@@ -272,14 +333,22 @@ class FlightPlanParser:
         Extract speed from flight plan
         Format: N0450 (knots), M082 (Mach), K0850 (km/h)
         """
-        if candidates['speeds']:
-            return candidates['speeds'][0]
-        
-        # Fallback search
-        match = re.search(r'\b(N\d{4}|M\d{3}|K\d{4})\b', normalized)
-        if match:
-            return match.group(1)
-        
+        if candidates["speeds"]:
+            return candidates["speeds"][0]
+
+        # Second pass: combined token if candidate list was empty (e.g. unusual spacing).
+        m = _FIELD15_SPEED_LEVEL_RE.search(normalized)
+        if m:
+            sp = _speed_from_field15_speed_level_token(m.group(1))
+            if sp:
+                return sp
+
+        # Standalone knots / km/h only (no global Mach scan — collides with M### airways).
+        for pat in (r"\b(N\d{3,5})\b", r"\b(K\d{3,5})\b"):
+            match = re.search(pat, normalized)
+            if match:
+                return match.group(1)
+
         return None
     
     def get_errors(self) -> List[str]:

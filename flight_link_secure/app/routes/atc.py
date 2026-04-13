@@ -172,6 +172,37 @@ def atc_add_flight_plan():
     return render_template('atc/add_flight_plan.html')
 
 
+@bp.route('/atc/edit-flight-plan/<int:plan_id>', methods=['GET', 'POST'])
+@login_required
+@atc_required
+def atc_edit_flight_plan(plan_id):
+    """Edit existing flight plan text in the database (same callsign as filed in ICAO text)."""
+    flight_plan = FlightPlan.query.get_or_404(plan_id)
+
+    if request.method == 'POST':
+        raw = request.form.get('raw_flight_plan', '').strip()
+        outcome = atc_service.edit_flight_plan_post(flight_plan, raw)
+
+        if outcome.get('flash'):
+            msg, cat = outcome['flash']
+            flash(msg, cat)
+
+        if outcome['action'] == 'render':
+            ctx = outcome.get('context') or {}
+            return render_template(outcome['template'], **ctx)
+
+        if outcome['action'] == 'redirect':
+            for log_pair in outcome.get('logs', []):
+                audit_service.log_action(log_pair[0], log_pair[1])
+            return redirect(url_for('atc.atc_manage_flight_plans'))
+
+    return render_template(
+        'atc/edit_flight_plan.html',
+        flight_plan=flight_plan,
+        raw_value=flight_plan.raw_flight_plan or '',
+    )
+
+
 @bp.route('/atc/manage-flight-plans')
 @login_required
 @atc_required
@@ -227,3 +258,32 @@ def api_flight_plan(callsign):
     if ok:
         return jsonify(payload)
     return jsonify(payload), code
+
+
+@bp.route('/atc/deactivate-track/<int:track_id>', methods=['POST'])
+@login_required
+@atc_required
+def atc_deactivate_track(track_id):
+    """
+    Deactivate an active track (JSON). Removes it from defense radar active queries.
+    CSRF: send header ``X-CSRFToken`` (or form field ``csrf_token``) for AJAX.
+    """
+    try:
+        track = atc_service.deactivate_track(track_id, current_user)
+    except atc_service.TrackNotFoundError:
+        return jsonify({'ok': False, 'message': f'Track not found (id {track_id}).'}), 404
+    except atc_service.TrackAlreadyInactiveError:
+        return jsonify({'ok': False, 'message': 'Track is already inactive'}), 200
+    except atc_service.TrackDeactivateError as e:
+        return jsonify({'ok': False, 'message': str(e)}), 400
+
+    audit_service.log_action(
+        'Track Deactivated',
+        f'Track ID: {track.id}, Callsign: {track.callsign}, User: {current_user.username}'
+    )
+    return jsonify({
+        'ok': True,
+        'message': 'Track deactivated successfully.',
+        'callsign': track.callsign,
+        'track_id': track.id,
+    })

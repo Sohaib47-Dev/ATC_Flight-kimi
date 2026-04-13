@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Flight Plan {{ flight_plan.callsign }} - Flight-Link Secure{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="text-radar-cyan fw-bold">
+                <i class="bi bi-pencil-square me-3"></i>Edit Flight Plan
+            </h1>
+            <p class="text-secondary">
+                Update the stored ICAO text for <strong class="text-radar-amber">{{ flight_plan.callsign }}</strong>
+                (plan #{{ flight_plan.id }}). The filed callsign inside the plan must stay <strong>{{ flight_plan.callsign }}</strong>.
+            </p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-file-earmark-text"></i>
+                    Raw ICAO flight plan
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('atc.atc_edit_flight_plan', plan_id=flight_plan.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="mb-3">
+                            <label class="form-label text-secondary">Callsign (database)</label>
+                            <input type="text" class="form-control" value="{{ flight_plan.callsign }}" readonly disabled>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="raw_flight_plan" class="form-label">
+                                <i class="bi bi-file-text me-2"></i>Raw ICAO flight plan
+                            </label>
+                            <textarea class="form-control"
+                                      id="raw_flight_plan"
+                                      name="raw_flight_plan"
+                                      rows="14"
+                                      required
+                                      style="font-family: 'Courier New', monospace; font-size: 0.9rem;">{{ raw_value }}</textarea>
+                            <small class="text-secondary mt-2 d-block">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Validated on save. Editing is blocked while this plan has active tracks.
+                            </small>
+                        </div>
+
+                        <div class="d-flex gap-3">
+                            <button type="submit" class="btn btn-success flex-grow-1">
+                                <i class="bi bi-check-circle me-2"></i>
+                                Save changes
+                            </button>
+                            <a href="{{ url_for('atc.atc_manage_flight_plans') }}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i>
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -113,7 +113,7 @@ flight_link_secure/
 - FIR Entry: Match against Pakistan FIR entry points list
 
 ### Pakistan FIR Entry Points
-SULOM, MERUN, VIKIT, GUGAL, PURPA, BIROS, NOKID, TIGER, ORPOR, LELIM, DUDAT, SARAB, PABLA, KARON, NISAR, KAMIL, MEPAN, TOSAR
+Canonical names in code (`PAKISTAN_FIR_ENTRY_POINTS`): SULOM, MERUN, VIKIT, GUGAL, PURPA, BIROS, DOBAT, SIRKA, TELEM, REGET, LAJAK, ASSVIB. Legacy route text may still use **DODAT**; it is normalized to **DOBAT**.
 
 ## ATC Estimate Validation
 
@@ -149,10 +149,16 @@ SULOM, MERUN, VIKIT, GUGAL, PURPA, BIROS, NOKID, TIGER, ORPOR, LELIM, DUDAT, SAR
 - Time-based speed calculation
 - Linear interpolation for smooth movement
 
+### Real-time WebSocket updates (defense radar)
+- Run the app with **`python app.py`**, which uses **`socketio.run(...)`** (Flask-SocketIO, threading mode) so the browser can connect with Socket.IO.
+- The radar page performs **one** `GET /api/defense/tracks` to hydrate full rows (including `resolved_path` for route lines), then receives **`aircraft_update`** events with slim `{ id, lat, lon, cfl, callsign, … }` payloads.
+- Simulation advances on the **server tick** (`RADAR_WS_TICK_MS`), not per browser poll.
+- **Demo presentation mode** (faster *display* interpolation only; server physics unchanged): set `RADAR_DEMO_MODE=true` and optionally `RADAR_DEMO_ANIMATION_SPEED` (e.g. `3.0`).
+
 ## API Endpoints
 
 ### Authentication Required
-- `GET /api/defense/tracks` - Get active tracks for radar
+- `GET /api/defense/tracks` - Full track snapshot for radar (hydration, tests, debugging)
 - `POST /api/validate-estimates` - Validate ATC estimates (AJAX)
 - `GET /api/flight-plan/<callsign>` - Get flight plan by callsign
 
@@ -180,6 +186,10 @@ Edit `modules/sample_data.py` and add to `SAMPLE_FLIGHT_PLANS` list:
 ### Environment Variables
 - `SECRET_KEY` - Flask secret key
 - `DATABASE_URL` - Database connection string (default: SQLite)
+- `RADAR_WS_TICK_MS` - Socket.IO broadcast interval (ms); each tick advances server simulation once
+- `RADAR_INTERP_SEGMENT_SEC` - Client lat/lon lerp segment length (seconds) for smooth motion between ticks
+- `RADAR_DEMO_MODE` - When `true`, multiplies only the **interpolation progress** on the radar (not ground speed or backend physics)
+- `RADAR_DEMO_ANIMATION_SPEED` - Demo multiplier (e.g. `3.0`) used with `RADAR_DEMO_MODE`
 
 ## License
 
