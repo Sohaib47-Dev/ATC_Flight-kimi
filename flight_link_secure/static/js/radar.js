@@ -66,7 +66,7 @@ function getInterpSegmentSec() {
     if (c && Number.isFinite(c.interpSegmentSec) && c.interpSegmentSec > 0.05) {
         return c.interpSegmentSec;
     }
-    return 0.45;
+    return 0.2;
 }
 
 function lerp(a, b, t) {
@@ -2613,6 +2613,95 @@ function bearingDegTrueNorth(lat1, lon1, lat2, lon2) {
     return br;
 }
 
+/** Normalize a path vertex to {lat, lon} (supports `longitude`). */
+function _pathVertexLatLon(p) {
+    if (!p || typeof p !== 'object') return null;
+    const lat = Number(p.lat);
+    const lon = Number(p.lon != null ? p.lon : p.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return { lat, lon };
+}
+
+/**
+ * True-north track (deg [0,360)) of the polyline segment closest to (lat,lon) in projected SVG space.
+ * Matches how the map is drawn so the icon aligns with the drawn route (e.g. westbound along L509).
+ */
+function bearingAlongPolylineNearLatLonDeg(lat, lon, path) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !path || path.length < 2) return null;
+    const pts = [];
+    for (let i = 0; i < path.length; i++) {
+        const q = _pathVertexLatLon(path[i]);
+        if (q) pts.push(q);
+    }
+    if (pts.length < 2) return null;
+    const pp = geoToSVG(lat, lon);
+    let bestBrng = null;
+    let bestDistSq = Infinity;
+    for (let i = 0; i < pts.length - 1; i++) {
+        const a = pts[i];
+        const b = pts[i + 1];
+        const pa = geoToSVG(a.lat, a.lon);
+        const pb = geoToSVG(b.lat, b.lon);
+        const abx = pb.x - pa.x;
+        const aby = pb.y - pa.y;
+        const apx = pp.x - pa.x;
+        const apy = pp.y - pa.y;
+        const ab2 = abx * abx + aby * aby;
+        let t = ab2 > 1e-12 ? (apx * abx + apy * aby) / ab2 : 0;
+        t = Math.max(0, Math.min(1, t));
+        const qx = pa.x + t * abx;
+        const qy = pa.y + t * aby;
+        const ddx = pp.x - qx;
+        const ddy = pp.y - qy;
+        const d = ddx * ddx + ddy * ddy;
+        if (d < bestDistSq) {
+            bestDistSq = d;
+            bestBrng = bearingDegTrueNorth(a.lat, a.lon, b.lat, b.lon);
+        }
+    }
+    return bestBrng;
+}
+
+/**
+ * Convert true-north clockwise track (0=N, 90=E) to the SVG heading angle used with
+ * ``rotate(heading + 90)`` for this app's linear geoToSVG projection (same convention as frame delta atan2).
+ */
+function trueNorthTrackDegToSvgIconHeadingDeg(trackTrueDeg) {
+    if (!Number.isFinite(trackTrueDeg)) return null;
+    const br = toRad(trackTrueDeg);
+    return (Math.atan2(-Math.cos(br), Math.sin(br)) * 180) / Math.PI;
+}
+
+/** Great-circle point `distanceNm` forward from (lat,lon) on true-north `bearingDeg` (same R as haversineNm). */
+function advanceLatLonAlongBearingNm(lat, lon, bearingDeg, distanceNm) {
+    if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lon) ||
+        !Number.isFinite(bearingDeg) ||
+        !Number.isFinite(distanceNm) ||
+        distanceNm <= 0
+    ) {
+        return { lat, lon };
+    }
+    const R = 3440.065;
+    const δ = distanceNm / R;
+    const θ = toRad(bearingDeg);
+    const φ1 = toRad(lat);
+    const λ1 = toRad(lon);
+    const lat2 = Math.asin(
+        Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ)
+    );
+    let λ2 =
+        λ1 +
+        Math.atan2(
+            Math.sin(θ) * Math.sin(δ) * Math.cos(φ1),
+            Math.cos(δ) - Math.sin(φ1) * Math.sin(lat2)
+        );
+    let lonDeg = (λ2 * 180) / Math.PI;
+    lonDeg = ((lonDeg + 540) % 360) - 180;
+    return { lat: (lat2 * 180) / Math.PI, lon: lonDeg };
+}
+
 function parseRouteTokens(routeStr) {
     if (!routeStr || typeof routeStr !== 'string') return [];
     return routeStr
@@ -2902,6 +2991,8 @@ class Aircraft {
         this._lastHeadingLon = null;
         /** True-north bearing (deg) for dead reckoning between server polls; updated when targets move. */
         this._predictionBearingDeg = null;
+        /** Last server snapshot changed lat/lon (skip extrapolation on duplicate payloads). */
+        this._serverPositionMoved = true;
         this._radarDbgAcc = 0;
         this._radarDbgN = 0;
 
@@ -2944,6 +3035,11 @@ class Aircraft {
                 this._dispLat = this._serverTargetLat;
                 this._dispLon = this._serverTargetLon;
                 this._interpT = 1;
+            }
+            {
+                const tr = bearingAlongPolylineNearLatLonDeg(this._simLat, this._simLon, this.resolvedPath);
+                const hSvg = trueNorthTrackDegToSvgIconHeadingDeg(tr);
+                if (hSvg != null) this.heading = hSvg;
             }
             this.trail = [{ x: this.currentX, y: this.currentY }];
         } else {
@@ -3033,6 +3129,7 @@ class Aircraft {
             }
             this.targetX = this._serverTargetX;
             this.targetY = this._serverTargetY;
+            this._serverPositionMoved = moved;
         }
         const newKey = simulationRouteKey(this.fir_entry, this.route, this.speedField);
         if (!this._serverSim && newKey !== this._routeKey) {
@@ -3115,6 +3212,39 @@ class Aircraft {
                 this._interpT = 1;
             }
 
+            const EXTRAP_MAX_LEAD_NM = 12;
+            if (
+                this._interpT >= 1 - 1e-4 &&
+                this._serverPositionMoved &&
+                this._predictionBearingDeg != null &&
+                this.groundSpeed > 40 &&
+                String(this.status || '')
+                    .toLowerCase()
+                    .trim() === 'active' &&
+                this._dispLat != null &&
+                this._dispLon != null &&
+                this._serverTargetLat != null &&
+                this._serverTargetLon != null
+            ) {
+                const nmStep = (this.groundSpeed / 3600) * dt;
+                const next = advanceLatLonAlongBearingNm(
+                    this._dispLat,
+                    this._dispLon,
+                    this._predictionBearingDeg,
+                    nmStep
+                );
+                const leadNm = haversineNm(
+                    next.lat,
+                    next.lon,
+                    this._serverTargetLat,
+                    this._serverTargetLon
+                );
+                if (leadNm <= EXTRAP_MAX_LEAD_NM) {
+                    this._dispLat = next.lat;
+                    this._dispLon = next.lon;
+                }
+            }
+
             if (this._dispLat != null && this._dispLon != null) {
                 this._simLat = this._dispLat;
                 this._simLon = this._dispLon;
@@ -3125,7 +3255,18 @@ class Aircraft {
             this.targetX = this._serverTargetX;
             this.targetY = this._serverTargetY;
 
-            if (
+            let trackTrueDeg = bearingAlongPolylineNearLatLonDeg(
+                this._simLat,
+                this._simLon,
+                this.resolvedPath
+            );
+            if (trackTrueDeg == null && this._predictionBearingDeg != null) {
+                trackTrueDeg = this._predictionBearingDeg;
+            }
+            const hFromTrack = trueNorthTrackDegToSvgIconHeadingDeg(trackTrueDeg);
+            if (hFromTrack != null) {
+                this.heading = hFromTrack;
+            } else if (
                 osl != null &&
                 oso != null &&
                 this._simLat != null &&
@@ -3194,19 +3335,25 @@ class Aircraft {
         this.currentX += (this.targetX - this.currentX) * smooth;
         this.currentY += (this.targetY - this.currentY) * smooth;
 
-        const dLat = this._simLat - this._lastHeadingLat;
-        const dLon = this._simLon - this._lastHeadingLon;
-        if (Math.abs(dLat) + Math.abs(dLon) > 1e-7) {
-            const svgA = geoToSVG(this._lastHeadingLat, this._lastHeadingLon);
-            const svgB = geoToSVG(this._simLat, this._simLon);
-            const dx = svgB.x - svgA.x;
-            const dy = svgB.y - svgA.y;
-            if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05) {
-                this.heading = Math.atan2(dy, dx) * (180 / Math.PI);
+        const trClient = bearingAlongPolylineNearLatLonDeg(this._simLat, this._simLon, this._pathPoints);
+        const hClient = trueNorthTrackDegToSvgIconHeadingDeg(trClient);
+        if (hClient != null) {
+            this.heading = hClient;
+        } else {
+            const dLat = this._simLat - this._lastHeadingLat;
+            const dLon = this._simLon - this._lastHeadingLon;
+            if (Math.abs(dLat) + Math.abs(dLon) > 1e-7) {
+                const svgA = geoToSVG(this._lastHeadingLat, this._lastHeadingLon);
+                const svgB = geoToSVG(this._simLat, this._simLon);
+                const dx = svgB.x - svgA.x;
+                const dy = svgB.y - svgA.y;
+                if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05) {
+                    this.heading = Math.atan2(dy, dx) * (180 / Math.PI);
+                }
             }
-            this._lastHeadingLat = this._simLat;
-            this._lastHeadingLon = this._simLon;
         }
+        this._lastHeadingLat = this._simLat;
+        this._lastHeadingLon = this._simLon;
 
         const tdx = this.targetX - this.currentX;
         const tdy = this.targetY - this.currentY;

@@ -43,6 +43,13 @@ def _config_bool(key: str, default: bool = False) -> bool:
     return default
 
 
+def _config_float(key: str, default: float = 1.0) -> float:
+    try:
+        return float(current_app.config.get(key, default))
+    except (RuntimeError, TypeError, ValueError):
+        return default
+
+
 def _parse_eto_utc_datetime(eto_utc: str | None, ref: datetime) -> datetime | None:
     if eto_utc is None or eto_utc == "":
         return None
@@ -110,8 +117,9 @@ def _advance_track(track: TrackData, now: datetime) -> dict[str, Any]:
     eto_ok = eto_bypass or not use_eto or eto_dt is None or now_utc >= eto_dt
 
     knots = parse_speed_to_knots(track.speed)
+    vis_mult = max(0.0, min(_config_float("RADAR_SIM_VISUAL_MULTIPLIER", 3.0), 50.0))
     if eto_ok and path and total_nm > 0 and (track.status or "").lower() == "active":
-        along += knots_to_nm_per_sec(knots) * dt
+        along += knots_to_nm_per_sec(knots) * dt * vis_mult
         if along >= total_nm:
             along = float(total_nm)
             track.status = "completed"

@@ -35,7 +35,7 @@ def defense_radar():
         fir_entries=ctx['fir_entries'],
         radar_poll_ms=int(cfg.get('RADAR_UI_POLL_MS', 500)),
         radar_ws_tick_ms=int(cfg.get('RADAR_WS_TICK_MS', 500)),
-        radar_interp_segment_sec=float(cfg.get('RADAR_INTERP_SEGMENT_SEC', 0.45)),
+        radar_interp_segment_sec=float(cfg.get('RADAR_INTERP_SEGMENT_SEC', 0.2)),
         radar_demo_mode=bool(cfg.get('RADAR_DEMO_MODE', False)),
         radar_demo_animation_speed=float(cfg.get('RADAR_DEMO_ANIMATION_SPEED', 3.0)),
     )

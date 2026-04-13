@@ -153,7 +153,32 @@ Canonical names in code (`PAKISTAN_FIR_ENTRY_POINTS`): SULOM, MERUN, VIKIT, GUGA
 - Run the app with **`python app.py`**, which uses **`socketio.run(...)`** (Flask-SocketIO, threading mode) so the browser can connect with Socket.IO.
 - The radar page performs **one** `GET /api/defense/tracks` to hydrate full rows (including `resolved_path` for route lines), then receives **`aircraft_update`** events with slim `{ id, lat, lon, cfl, callsign, … }` payloads.
 - Simulation advances on the **server tick** (`RADAR_WS_TICK_MS`), not per browser poll.
-- **Demo presentation mode** (faster *display* interpolation only; server physics unchanged): set `RADAR_DEMO_MODE=true` and optionally `RADAR_DEMO_ANIMATION_SPEED` (e.g. `3.0`).
+- **Why the marker can look slow:** each tick moves the aircraft by roughly `(speed in knots / 3600) × dt` nautical miles along the route. With a short `dt` (fast ticks), that step is often a tiny fraction of a degree—almost invisible on the SVG until you tune the knobs below.
+
+#### Making motion more noticeable (Tier A — client / timing, no change to filed speed in the database)
+
+| Variable | Role |
+|----------|------|
+| `RADAR_DEMO_MODE` | When `true`, speeds up **only** how fast the browser lerps toward each new server position (not the stored `speed` field or NM math on the server). |
+| `RADAR_DEMO_ANIMATION_SPEED` | Multiplier used with demo mode (e.g. `3.0`). |
+| `RADAR_INTERP_SEGMENT_SEC` | Seconds to blend from previous to next lat/lon (default **0.2**). **Lower** = snappier; **higher** = softer easing. |
+| `RADAR_WS_TICK_MS` | Milliseconds between server simulation steps. **Higher** (e.g. `800`–`1500`) = **larger** geographic jump per update (more visible, fewer updates/sec). **Lower** = smoother but smaller steps per message. |
+
+Example (PowerShell) for a livelier demo without editing code:
+
+```text
+$env:RADAR_DEMO_MODE="true"
+$env:RADAR_DEMO_ANIMATION_SPEED="3"
+$env:RADAR_INTERP_SEGMENT_SEC="0.18"
+$env:RADAR_WS_TICK_MS="900"
+python app.py
+```
+
+#### Server-side demo speed (Tier B — optional)
+
+- `RADAR_SIM_VISUAL_MULTIPLIER` — Multiplies **only** the distance advanced along the simulated route each tick (`along_nm`). Default **3.0** (set `1` for stricter realism). Separation uses the same advanced positions. Not a substitute for real-world filed speed.
+
+The defense radar client also **dead-reckons** briefly along the last true bearing at filed ground speed between WebSocket snapshots (capped lead vs. last server position), so motion feels more continuous—similar in spirit to consumer map apps.
 
 ## API Endpoints
 
@@ -186,10 +211,11 @@ Edit `modules/sample_data.py` and add to `SAMPLE_FLIGHT_PLANS` list:
 ### Environment Variables
 - `SECRET_KEY` - Flask secret key
 - `DATABASE_URL` - Database connection string (default: SQLite)
-- `RADAR_WS_TICK_MS` - Socket.IO broadcast interval (ms); each tick advances server simulation once
-- `RADAR_INTERP_SEGMENT_SEC` - Client lat/lon lerp segment length (seconds) for smooth motion between ticks
-- `RADAR_DEMO_MODE` - When `true`, multiplies only the **interpolation progress** on the radar (not ground speed or backend physics)
+- `RADAR_WS_TICK_MS` - Socket.IO broadcast interval (ms); each tick advances server simulation once (see radar section for visibility tradeoffs)
+- `RADAR_INTERP_SEGMENT_SEC` - Client lat/lon lerp segment length (seconds) between server snapshots
+- `RADAR_DEMO_MODE` - When `true`, multiplies only the **interpolation progress** on the radar (not the stored aircraft speed field)
 - `RADAR_DEMO_ANIMATION_SPEED` - Demo multiplier (e.g. `3.0`) used with `RADAR_DEMO_MODE`
+- `RADAR_SIM_VISUAL_MULTIPLIER` - Multiplies server `along_nm` advance per tick for demo visibility (default **3.0**; use `1` for nominal NM/sec; see radar Tier B)
 
 ## License
 

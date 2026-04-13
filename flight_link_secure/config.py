@@ -21,11 +21,17 @@ class Config:
     RADAR_UI_POLL_MS = _radar_ui_poll_ms
     #: Server WebSocket broadcast interval (ms); each tick advances simulation once for all clients.
     RADAR_WS_TICK_MS = int(os.environ.get("RADAR_WS_TICK_MS", str(_radar_ui_poll_ms)))
-    #: Client lat/lon lerp segment length (seconds) — align with ~RADAR_WS_TICK_MS for smooth motion.
-    RADAR_INTERP_SEGMENT_SEC = float(os.environ.get("RADAR_INTERP_SEGMENT_SEC", "0.45"))
+    #: Client lat/lon lerp segment length (seconds); lower = snappier marker toward each server snapshot.
+    RADAR_INTERP_SEGMENT_SEC = float(os.environ.get("RADAR_INTERP_SEGMENT_SEC", "0.2"))
     _demo = os.environ.get("RADAR_DEMO_MODE", "").lower()
     RADAR_DEMO_MODE = _demo in ("1", "true", "yes", "on")
     RADAR_DEMO_ANIMATION_SPEED = float(os.environ.get("RADAR_DEMO_ANIMATION_SPEED", "3.0"))
+    #: Multiplies along-route advance per sim tick (demo / presentation; not filed speed).
+    try:
+        _vis = float(os.environ.get("RADAR_SIM_VISUAL_MULTIPLIER", "3.0"))
+    except ValueError:
+        _vis = 1.0
+    RADAR_SIM_VISUAL_MULTIPLIER = max(0.0, min(_vis, 50.0))
 
 
 class DevelopmentConfig(Config):
@@ -42,6 +48,8 @@ class TestingConfig(Config):
     WTF_CSRF_ENABLED = False
     RADAR_SIM_USE_ETO = False
     RADAR_SIM_ETO_BYPASS = True
+    #: Unit tests assert nominal NM advance; keep strict 1.0 while prod defaults may boost visibility.
+    RADAR_SIM_VISUAL_MULTIPLIER = 1.0
 
 
 config_by_name = {
