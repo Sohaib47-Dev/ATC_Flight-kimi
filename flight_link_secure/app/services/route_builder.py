@@ -150,6 +150,11 @@ def flatten_airway_points_for_route_tokens(
     tokens: list[str],
     fir_entry: str | None = None,
 ) -> list[tuple[float, float]]:
+    """
+    Expand airway tokens to lat/lon. Each polyline is **bidirectional**: order is chosen by
+    proximity of the join point (``prev_ll``, else anchor waypoint, else next route waypoint)
+    to the polyline ends; if only a following waypoint exists, orient so the path runs toward it.
+    """
     pts: list[tuple[float, float]] = []
     start = _airway_slice_start(tokens, fir_entry)
     rules = _airspace_rules()
@@ -160,16 +165,26 @@ def flatten_airway_points_for_route_tokens(
     for i in range(start, len(tokens)):
         tok = tokens[i]
         anchor_ll = _anchor_ll_for_airway_trim(tokens, i, wps, prev_ll)
+        look_tok = tokens[i + 1] if i + 1 < len(tokens) else None
+        look_wp = wps.get(look_tok) if look_tok else None
+        look_ll: tuple[float, float] | None = None
+        if look_wp:
+            look_ll = (float(look_wp[0]), float(look_wp[1]))
         for aid in rules.get(tok, []):
             poly = polys.get(aid.upper())
             if not poly:
                 continue
-            if prev_ll is None:
-                ordered = list(poly)
-            else:
-                d0 = _haversine_nm(prev_ll, poly[0])
-                d1 = _haversine_nm(prev_ll, poly[-1])
+            ref = prev_ll if prev_ll is not None else anchor_ll
+            if ref is not None:
+                d0 = _haversine_nm(ref, poly[0])
+                d1 = _haversine_nm(ref, poly[-1])
                 ordered = list(poly) if d0 <= d1 + _ORIENT_TIE_EPS_NM else list(reversed(poly))
+            elif look_ll is not None:
+                d0 = _haversine_nm(look_ll, poly[0])
+                d1 = _haversine_nm(look_ll, poly[-1])
+                ordered = list(poly) if d0 >= d1 else list(reversed(poly))
+            else:
+                ordered = list(poly)
             ordered = _trim_polyline_from_anchor(ordered, anchor_ll)
             for lat, lon in ordered:
                 if pts and abs(pts[-1][0] - lat) < 1e-8 and abs(pts[-1][1] - lon) < 1e-8:

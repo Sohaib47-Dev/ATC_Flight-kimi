@@ -5,6 +5,8 @@ from flask_login import login_required, current_user
 from app.models import FlightPlan, TrackData
 from app.services import audit_service, atc_service
 from app.utils.decorators import atc_required
+from modules.flight_plan_form_io import default_form_fields, parse_raw_to_form_fields
+from modules.flight_plan_parser import FlightPlanParser
 from modules.validators import validate_atc_estimates
 
 bp = Blueprint('atc', __name__)
@@ -169,7 +171,32 @@ def atc_add_flight_plan():
                 audit_service.log_action(log_pair[0], log_pair[1])
             return redirect(url_for('atc.atc_manage_flight_plans'))
 
-    return render_template('atc/add_flight_plan.html')
+    return render_template(
+        'atc/add_flight_plan.html',
+        initial_form=default_form_fields(),
+        callsign='',
+    )
+
+
+@bp.route('/atc/api/flight-plan/form-parse', methods=['POST'])
+@login_required
+@atc_required
+def atc_api_flight_plan_form_parse():
+    """Parse raw ICAO text into structured form fields (JSON)."""
+    data = request.get_json(silent=True) or {}
+    raw = (data.get('raw_flight_plan') or '').strip()
+    fields, notes = parse_raw_to_form_fields(raw)
+    parser = FlightPlanParser()
+    parsed = parser.parse(raw)
+    return jsonify(
+        {
+            'ok': True,
+            'fields': fields,
+            'notes': notes,
+            'parser_ok': parsed is not None,
+            'parser_errors': parser.get_errors() if not parsed else [],
+        }
+    )
 
 
 @bp.route('/atc/edit-flight-plan/<int:plan_id>', methods=['GET', 'POST'])
@@ -196,10 +223,12 @@ def atc_edit_flight_plan(plan_id):
                 audit_service.log_action(log_pair[0], log_pair[1])
             return redirect(url_for('atc.atc_manage_flight_plans'))
 
+    initial_form, _ = parse_raw_to_form_fields(flight_plan.raw_flight_plan or '')
     return render_template(
         'atc/edit_flight_plan.html',
         flight_plan=flight_plan,
         raw_value=flight_plan.raw_flight_plan or '',
+        initial_form=initial_form,
     )
 
 

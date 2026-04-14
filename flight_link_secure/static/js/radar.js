@@ -2521,6 +2521,7 @@ const AIRSPACE_ROUTE_RULES = {
     L509: ['L509'],
     L750: ['L750'],
     P628: ['P628'],
+    A791: ['A791'],
 };
 
 const AIRWAY_POLYLINES = {
@@ -2573,6 +2574,14 @@ const AIRWAY_POLYLINES = {
         { lat: 29.052161005193536, lon: 67.08258895874023 },
         { lat: 27.028034251819957, lon: 64.24250011444092 },
         { lat: CORRECTED_ENTRY_POINTS.ASSVIB.lat, lon: CORRECTED_ENTRY_POINTS.ASSVIB.lon },
+    ],
+    /** TELEM→NH→KC→SK→VIKIT (reversible via orient+trim). */
+    A791: [
+        { lat: CORRECTED_ENTRY_POINTS.TELEM.lat, lon: CORRECTED_ENTRY_POINTS.TELEM.lon },
+        { lat: 27.028034251819957, lon: 64.24250011444092 },
+        { lat: 26.298984929865057, lon: 66.13169593811035 },
+        { lat: 26.999563487659803, lon: 68.00669651031494 },
+        { lat: CORRECTED_ENTRY_POINTS.VIKIT.lat, lon: CORRECTED_ENTRY_POINTS.VIKIT.lon },
     ],
 };
 
@@ -2810,15 +2819,30 @@ function flattenAirwayPointsForRouteTokens(firEntry, tokens) {
         for (const aid of list) {
             const poly = AIRWAY_POLYLINES[aid];
             if (!poly || !poly.length) continue;
+            const first = poly[0];
+            const lastV = poly[poly.length - 1];
+            const lookFwd = waypointLatLonFromRouteToken(
+                i + 1 < tokens.length ? tokens[i + 1] : null
+            );
+            const refPt =
+                prev && Number.isFinite(prev.lat) && Number.isFinite(prev.lon)
+                    ? prev
+                    : anchorLl &&
+                        Number.isFinite(anchorLl.lat) &&
+                        Number.isFinite(anchorLl.lon)
+                      ? anchorLl
+                      : null;
             let ordered;
-            if (!prev) {
-                ordered = poly.slice();
-            } else {
-                const first = poly[0];
-                const lastV = poly[poly.length - 1];
-                const d0 = haversineNm(prev.lat, prev.lon, first.lat, first.lon);
-                const d1 = haversineNm(prev.lat, prev.lon, lastV.lat, lastV.lon);
+            if (refPt) {
+                const d0 = haversineNm(refPt.lat, refPt.lon, first.lat, first.lon);
+                const d1 = haversineNm(refPt.lat, refPt.lon, lastV.lat, lastV.lon);
                 ordered = d0 <= d1 + _ORIENT_TIE_EPS_NM ? poly.slice() : [...poly].reverse();
+            } else if (lookFwd) {
+                const d0 = haversineNm(lookFwd.lat, lookFwd.lon, first.lat, first.lon);
+                const d1 = haversineNm(lookFwd.lat, lookFwd.lon, lastV.lat, lastV.lon);
+                ordered = d0 >= d1 ? poly.slice() : [...poly].reverse();
+            } else {
+                ordered = poly.slice();
             }
             ordered = trimPolylineFromAnchor(ordered, anchorLl);
             for (const p of ordered) {

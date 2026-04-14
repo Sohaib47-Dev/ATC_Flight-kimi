@@ -1,0 +1,181 @@
+{# Structured ICAO fields + live preview. Expects: mode ('add'|'edit'), initial_form (dict), flight_plan (edit only). #}
+<style>
+    .icao-fpl-preview {
+        font-family: ui-monospace, "Cascadia Code", Consolas, "Courier New", monospace;
+        font-size: 0.8rem;
+        background: var(--radar-darker);
+        border: 1px solid var(--card-border);
+        border-radius: 0.35rem;
+        padding: 0.75rem;
+        white-space: pre-wrap;
+        max-height: 24rem;
+        overflow-y: auto;
+        color: var(--radar-cyan);
+    }
+    .icao-fpl-structured .form-label {
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+        margin-bottom: 0.2rem;
+    }
+    .icao-fpl-toolbar .btn { font-size: 0.8rem; }
+</style>
+
+<div class="row g-3">
+    <div class="col-lg-7 icao-fpl-structured">
+        <div class="row g-2 mb-2">
+            <div class="col-md-6">
+                <label class="form-label">Aircraft identification (callsign) <span class="text-danger">*</span></label>
+                {% if mode == 'add' %}
+                <input type="text" class="form-control text-uppercase" name="callsign" id="callsign"
+                       data-fpl-field="callsign" maxlength="20" pattern="[A-Za-z0-9\-]+"
+                       value="{{ (callsign or initial_form.get('callsign', ''))|e }}" required
+                       placeholder="e.g. PIA777">
+                {% else %}
+                <input type="text" class="form-control text-uppercase" readonly required
+                       data-fpl-field="callsign" value="{{ flight_plan.callsign|e }}"
+                       title="Callsign is fixed for this record">
+                {% endif %}
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Flight rules</label>
+                <select class="form-select" data-fpl-field="flight_rules">
+                    {% for o in ['I', 'V', 'Y', 'Z'] %}
+                    <option value="{{ o }}" {% if initial_form.get('flight_rules', 'I') == o %}selected{% endif %}>{{ o }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Type of flight</label>
+                <select class="form-select" data-fpl-field="type_of_flight">
+                    {% for o in ['S', 'N', 'G', 'M', 'X'] %}
+                    <option value="{{ o }}" {% if initial_form.get('type_of_flight', 'S') == o %}selected{% endif %}>{{ o }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="row g-2 mb-2">
+            <div class="col-md-4">
+                <label class="form-label">Aircraft type <span class="text-danger">*</span></label>
+                <input type="text" class="form-control text-uppercase" data-fpl-field="aircraft_type"
+                       value="{{ initial_form.get('aircraft_type', '')|e }}" placeholder="A320" maxlength="6"
+                       required minlength="2" pattern="[A-Za-z][A-Za-z0-9]{1,5}"
+                       title="ICAO aircraft type / designator (e.g. A320, B77W)">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Wake turbulence</label>
+                <select class="form-select" data-fpl-field="wake_turbulence">
+                    {% for o in ['L', 'M', 'H', 'J', 'K'] %}
+                    <option value="{{ o }}" {% if initial_form.get('wake_turbulence', 'M') == o %}selected{% endif %}>{{ o }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-12">
+                <label class="form-label">Equipment (COM/NAV/SSR field 10)</label>
+                <textarea class="form-control text-uppercase font-monospace" rows="2" data-fpl-field="equipment"
+                          placeholder="e.g. SDE2E3FGHIRW/LB1">{{ initial_form.get('equipment', '')|e }}</textarea>
+            </div>
+        </div>
+
+        <div class="row g-2 mb-2">
+            <div class="col-md-4">
+                <label class="form-label">Departure aerodrome <span class="text-danger">*</span></label>
+                <input type="text" class="form-control text-uppercase" data-fpl-field="departure_aerodrome"
+                       value="{{ initial_form.get('departure_aerodrome', '')|e }}" placeholder="ICAO" maxlength="4"
+                       required minlength="4" pattern="[A-Za-z]{4}"
+                       title="Four-letter ICAO location indicator">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Departure time (UTC)</label>
+                <input type="text" class="form-control" data-fpl-field="departure_time_utc"
+                       value="{{ initial_form.get('departure_time_utc', '')|e }}" placeholder="2300" maxlength="4">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Cruise speed</label>
+                <input type="text" class="form-control text-uppercase" data-fpl-field="cruise_speed"
+                       value="{{ initial_form.get('cruise_speed', 'N0450')|e }}" placeholder="N0450">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Flight level / altitude</label>
+                <input type="text" class="form-control text-uppercase" data-fpl-field="flight_level"
+                       value="{{ initial_form.get('flight_level', 'F350')|e }}" placeholder="F350">
+            </div>
+            <div class="col-md-12">
+                <label class="form-label">Route (waypoints / airways / DCT) <span class="text-danger">*</span></label>
+                <textarea class="form-control text-uppercase font-monospace" rows="4" data-fpl-field="route"
+                          placeholder="SULOM DCT GUGAL DCT" required minlength="1"
+                          title="Filed route after speed/level">{{ initial_form.get('route', '')|e }}</textarea>
+            </div>
+        </div>
+
+        <div class="row g-2 mb-2">
+            <div class="col-md-4">
+                <label class="form-label">Destination aerodrome <span class="text-danger">*</span></label>
+                <input type="text" class="form-control text-uppercase" data-fpl-field="destination_aerodrome"
+                       value="{{ initial_form.get('destination_aerodrome', '')|e }}" maxlength="4"
+                       required minlength="4" pattern="[A-Za-z]{4}"
+                       title="Four-letter ICAO destination (no default — you must enter it)">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Dest. EET (UTC)</label>
+                <input type="text" class="form-control" data-fpl-field="destination_time_utc"
+                       value="{{ initial_form.get('destination_time_utc', '')|e }}" placeholder="0500" maxlength="4">
+            </div>
+            <div class="col-md-12">
+                <label class="form-label">Alternate / extra after destination (optional)</label>
+                <input type="text" class="form-control text-uppercase" data-fpl-field="alternate_suffix"
+                       value="{{ initial_form.get('alternate_suffix', '')|e }}"
+                       placeholder="e.g. OOMS (append after dest+EET)">
+            </div>
+        </div>
+
+        <div class="mb-2">
+            <label class="form-label">Field 18 — PBN / REG / EET / RMK (one item per line)</label>
+            <textarea class="form-control text-uppercase font-monospace" rows="4" data-fpl-field="field_18"
+                      placeholder="PBN/A1B1C1D1&#10;REG/APABC&#10;RMK/TCAS EQUIPPED">{{ initial_form.get('field_18', '')|e }}</textarea>
+        </div>
+
+        <div class="mb-2">
+            <label class="form-label">Other info (optional lines, appended before closing)</label>
+            <textarea class="form-control font-monospace" rows="2" data-fpl-field="other_info"
+                      placeholder="E/0700 or SEL/ABCD">{{ initial_form.get('other_info', '')|e }}</textarea>
+        </div>
+
+        <textarea name="raw_flight_plan" id="raw_flight_plan" class="visually-hidden" aria-hidden="true"></textarea>
+
+        <div class="mb-2">
+            <label class="form-label text-radar-amber"><i class="bi bi-code-square me-1"></i>Edit raw ICAO (optional)</label>
+            <textarea class="form-control font-monospace" id="icao_raw_editor" rows="6"
+                      placeholder="Paste full ICAO message; use “Apply raw to form” to load fields."></textarea>
+            <small class="text-secondary">Changes here sync into the form after a short pause, or use the button.</small>
+        </div>
+
+        <div class="icao-fpl-toolbar d-flex flex-wrap gap-2 mb-2">
+            <button type="button" class="btn btn-outline-info btn-sm" id="icao_btn_apply_raw">
+                <i class="bi bi-arrow-down-left-square me-1"></i>Apply raw to form
+            </button>
+            <button type="button" class="btn btn-outline-light btn-sm" id="icao_btn_copy">
+                <i class="bi bi-clipboard me-1"></i>Copy ICAO text
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="icao_btn_save_draft">
+                <i class="bi bi-save me-1"></i>Save draft
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="icao_btn_load_draft">
+                <i class="bi bi-folder2-open me-1"></i>Load draft
+            </button>
+            <button type="button" class="btn btn-outline-danger btn-sm" id="icao_btn_clear">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>Reset form
+            </button>
+        </div>
+        <p class="small mb-0" id="icao_parser_status"></p>
+    </div>
+
+    <div class="col-lg-5">
+        <label class="form-label">Live ICAO output</label>
+        <div id="icao_fpl_preview" class="icao-fpl-preview" role="status" aria-live="polite"></div>
+        <p class="small text-secondary mt-2 mb-0">
+            <span class="text-danger">*</span> Callsign, aircraft type, departure, destination, and route are required.
+            Other items use defaults when left blank (e.g. times 0000, speed N0450, level F350). Submitted text matches this panel.
+        </p>
+    </div>
+</div>

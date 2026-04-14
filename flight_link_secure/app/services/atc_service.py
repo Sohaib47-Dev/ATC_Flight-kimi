@@ -4,6 +4,7 @@ from datetime import datetime
 from app.extensions import db
 from app.models import DefenseMessage, FlightPlan, TrackData, User
 from modules.encryption import encrypt_track_data
+from modules.flight_plan_form_io import parse_raw_to_form_fields
 from modules.flight_plan_parser import FlightPlanParser
 from modules.validators import validate_atc_estimates
 
@@ -205,6 +206,16 @@ def transfer_track_to_defense(track_id):
     return track, defense_msg
 
 
+def _edit_flight_plan_template_ctx(flight_plan, raw_value: str):
+    raw = (raw_value or "").strip()
+    fields, _ = parse_raw_to_form_fields(raw)
+    return {
+        "flight_plan": flight_plan,
+        "raw_value": raw,
+        "initial_form": fields,
+    }
+
+
 def add_flight_plan_post(callsign, raw_flight_plan, replace_existing):
     """
     Process add/replace flight plan POST. Returns dict with:
@@ -214,11 +225,20 @@ def add_flight_plan_post(callsign, raw_flight_plan, replace_existing):
       flash_message, flash_category
       log_action, log_details (optional tuples)
     """
+    def _add_ctx(extra=None):
+        ctx = {
+            'callsign': (callsign or '').strip().upper(),
+            'initial_form': parse_raw_to_form_fields((raw_flight_plan or '').strip())[0],
+        }
+        if extra:
+            ctx.update(extra)
+        return ctx
+
     if not callsign or not raw_flight_plan:
         return {
             'action': 'render',
             'template': 'atc/add_flight_plan.html',
-            'context': {},
+            'context': _add_ctx(),
             'flash': ('All fields are required', 'error'),
         }
 
@@ -226,7 +246,7 @@ def add_flight_plan_post(callsign, raw_flight_plan, replace_existing):
         return {
             'action': 'render',
             'template': 'atc/add_flight_plan.html',
-            'context': {},
+            'context': _add_ctx(),
             'flash': ('Invalid callsign format', 'error'),
         }
 
@@ -238,7 +258,7 @@ def add_flight_plan_post(callsign, raw_flight_plan, replace_existing):
         return {
             'action': 'render',
             'template': 'atc/add_flight_plan.html',
-            'context': {},
+            'context': _add_ctx(),
             'flash': (f'Flight plan validation failed: {errors}', 'error'),
         }
 
@@ -247,7 +267,7 @@ def add_flight_plan_post(callsign, raw_flight_plan, replace_existing):
         return {
             'action': 'render',
             'template': 'atc/add_flight_plan.html',
-            'context': {},
+            'context': _add_ctx(),
             'flash': (
                 f'Callsign mismatch: You entered "{callsign}" but the ICAO flight plan contains '
                 f'"{icao_callsign}". Please ensure both callsigns match.',
@@ -266,10 +286,10 @@ def add_flight_plan_post(callsign, raw_flight_plan, replace_existing):
             return {
                 'action': 'render',
                 'template': 'atc/add_flight_plan.html',
-                'context': {
+                'context': _add_ctx({
                     'duplicate_callsign': callsign,
                     'has_active_tracks': True,
-                },
+                }),
                 'flash': (
                     f'Cannot replace flight plan {callsign}: has {active_tracks} active track(s). '
                     'Complete the tracks first.',
@@ -298,11 +318,11 @@ def add_flight_plan_post(callsign, raw_flight_plan, replace_existing):
             return {
                 'action': 'render',
                 'template': 'atc/add_flight_plan.html',
-                'context': {
+                'context': _add_ctx({
                     'duplicate_callsign': callsign,
                     'duplicate_data': raw_flight_plan,
                     'has_active_tracks': False,
-                },
+                }),
                 'flash': None,
             }
 
@@ -328,13 +348,11 @@ def edit_flight_plan_post(flight_plan, raw_flight_plan):
     Returns the same outcome shape as :func:`add_flight_plan_post`:
     ``action`` ('render' | 'redirect'), ``template``, ``context``, ``flash``, ``logs``.
     """
-    ctx_base = {'flight_plan': flight_plan, 'raw_value': (raw_flight_plan or '').strip()}
-
     if not (raw_flight_plan or '').strip():
         return {
             'action': 'render',
             'template': 'atc/edit_flight_plan.html',
-            'context': ctx_base,
+            'context': _edit_flight_plan_template_ctx(flight_plan, ''),
             'flash': ('Flight plan text is required', 'error'),
         }
 
@@ -346,7 +364,7 @@ def edit_flight_plan_post(flight_plan, raw_flight_plan):
         return {
             'action': 'render',
             'template': 'atc/edit_flight_plan.html',
-            'context': ctx_base,
+            'context': _edit_flight_plan_template_ctx(flight_plan, raw_flight_plan),
             'flash': (
                 f'Cannot edit: {active} active track(s). Complete or deactivate tracks first.',
                 'error',
@@ -360,7 +378,7 @@ def edit_flight_plan_post(flight_plan, raw_flight_plan):
         return {
             'action': 'render',
             'template': 'atc/edit_flight_plan.html',
-            'context': ctx_base,
+            'context': _edit_flight_plan_template_ctx(flight_plan, raw_flight_plan),
             'flash': (f'Flight plan validation failed: {errors}', 'error'),
         }
 
@@ -368,7 +386,7 @@ def edit_flight_plan_post(flight_plan, raw_flight_plan):
         return {
             'action': 'render',
             'template': 'atc/edit_flight_plan.html',
-            'context': ctx_base,
+            'context': _edit_flight_plan_template_ctx(flight_plan, raw_flight_plan),
             'flash': (
                 f'ICAO callsign in the plan is "{parsed.callsign}" but this record is '
                 f'"{flight_plan.callsign}". The filed callsign must match.',

@@ -97,6 +97,38 @@ class RouteBuilderTests(unittest.TestCase):
             "second vertices should lie on opposite legs of G325",
         )
 
+    def test_airway_orient_uses_lookahead_when_no_prev(self):
+        """No FIR join: next waypoint still orients A791 toward TELEM."""
+        path = route_builder.flatten_airway_points_for_route_tokens(["A791", "TELEM"], None)
+        self.assertGreaterEqual(len(path), 2)
+        telem = route_builder.corrected_entry_points()["TELEM"]
+        la, lo = telem[0], telem[1]
+        self.assertLess(haversine_nm(path[-1][0], path[-1][1], la, lo), 5.0)
+
+    def test_a791_bidirectional_telem_vikit(self):
+        """A791 TELEM→NH→KC→SK→VIKIT; reverse filing uses the same corridor."""
+        fwd = route_builder.build_simulated_route_path("TELEM", "TELEM A791 VIKIT")
+        rev = route_builder.build_simulated_route_path("VIKIT", "VIKIT A791 TELEM")
+        self.assertGreaterEqual(len(fwd), 3)
+        self.assertGreaterEqual(len(rev), 3)
+        _, total_fwd = cumulative_nm_polyline(fwd)
+        _, total_rev = cumulative_nm_polyline(rev)
+        self.assertAlmostEqual(total_fwd, total_rev, delta=2.0)
+
+        telem = route_builder.resolve_fir_entry_lat_lon("TELEM")
+        vikit = route_builder.resolve_fir_entry_lat_lon("VIKIT")
+        assert telem is not None and vikit is not None
+        self.assertLess(
+            haversine_nm(fwd[-1][0], fwd[-1][1], vikit[0], vikit[1]),
+            1.0,
+            "forward path should end near VIKIT",
+        )
+        self.assertLess(
+            haversine_nm(rev[-1][0], rev[-1][1], telem[0], telem[1]),
+            1.0,
+            "reverse path should end near TELEM",
+        )
+
     def test_slice_falls_back_to_route_start_when_fir_token_not_in_route(self):
         """MERUN omitted from route text: slice from 0; orient L750 from resolved MERUN."""
         path = route_builder.build_simulated_route_path("MERUN", "L750 BIROS")
