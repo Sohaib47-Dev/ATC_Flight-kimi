@@ -658,7 +658,7 @@
 <script src="{{ url_for('static', filename='js/radar.js') }}"></script>
 <script>
 window.__RADAR_CONFIG__ = {
-    interpSegmentSec: {{ radar_interp_segment_sec|default(0.2)|tojson }},
+    interpSegmentSec: {{ radar_interp_segment_sec|default(0.12)|tojson }},
     demoMode: {{ radar_demo_mode|default(false)|tojson }},
     demoAnimationSpeed: {{ radar_demo_animation_speed|default(3.0)|tojson }},
     wsTickMs: {{ radar_ws_tick_ms|default(500)|tojson }},

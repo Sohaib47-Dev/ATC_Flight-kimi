@@ -22,7 +22,7 @@ class Config:
     #: Server WebSocket broadcast interval (ms); each tick advances simulation once for all clients.
     RADAR_WS_TICK_MS = int(os.environ.get("RADAR_WS_TICK_MS", str(_radar_ui_poll_ms)))
     #: Client lat/lon lerp segment length (seconds); lower = snappier marker toward each server snapshot.
-    RADAR_INTERP_SEGMENT_SEC = float(os.environ.get("RADAR_INTERP_SEGMENT_SEC", "0.2"))
+    RADAR_INTERP_SEGMENT_SEC = float(os.environ.get("RADAR_INTERP_SEGMENT_SEC", "0.12"))
     _demo = os.environ.get("RADAR_DEMO_MODE", "").lower()
     RADAR_DEMO_MODE = _demo in ("1", "true", "yes", "on")
     RADAR_DEMO_ANIMATION_SPEED = float(os.environ.get("RADAR_DEMO_ANIMATION_SPEED", "3.0"))

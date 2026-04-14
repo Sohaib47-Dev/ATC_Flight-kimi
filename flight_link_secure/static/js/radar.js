@@ -28,7 +28,7 @@
 function initRadarWindowConfig() {
     if (typeof window === 'undefined') return;
     const defaults = {
-        animationSpeedMultiplier: 2.0,
+        animationSpeedMultiplier: 2.4,
         /** Set true for occasional ``[radar …]`` console logs (poll / sim). */
         radarDebugLog: false,
     };
@@ -48,7 +48,7 @@ function getAnimationSpeedMultiplier() {
         const v = window.config.animationSpeedMultiplier;
         if (Number.isFinite(v) && v > 0) return v;
     }
-    return 2.0;
+    return 2.4;
 }
 
 /** Demo / presentation: speeds up **position interpolation only** (not ground speed or server physics). */
@@ -66,11 +66,19 @@ function getInterpSegmentSec() {
     if (c && Number.isFinite(c.interpSegmentSec) && c.interpSegmentSec > 0.05) {
         return c.interpSegmentSec;
     }
-    return 0.2;
+    return 0.12;
 }
 
 function lerp(a, b, t) {
     return a + (b - a) * t;
+}
+
+/** Lerp weight for server snapshots: most displacement early, soft settle (less laggy than linear). */
+function easeOutCubicInterpWeight(t) {
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    const u = 1 - t;
+    return 1 - u * u * u;
 }
 
 initRadarWindowConfig();
@@ -3237,8 +3245,9 @@ class Aircraft {
                 this._serverTargetLon != null
             ) {
                 this._interpT = Math.min(1, this._interpT + (dt / seg) * demo);
-                this._dispLat = lerp(this._interpPrevLat, this._serverTargetLat, this._interpT);
-                this._dispLon = lerp(this._interpPrevLon, this._serverTargetLon, this._interpT);
+                const tw = easeOutCubicInterpWeight(this._interpT);
+                this._dispLat = lerp(this._interpPrevLat, this._serverTargetLat, tw);
+                this._dispLon = lerp(this._interpPrevLon, this._serverTargetLon, tw);
             } else if (this._serverTargetLat != null && this._serverTargetLon != null) {
                 this._dispLat = this._serverTargetLat;
                 this._dispLon = this._serverTargetLon;
@@ -3364,7 +3373,7 @@ class Aircraft {
         this.targetX = pos.x;
         this.targetY = pos.y;
 
-        const smooth = Math.min(1, 12 * dt * m);
+        const smooth = Math.min(1, 17 * dt * m);
         this.currentX += (this.targetX - this.currentX) * smooth;
         this.currentY += (this.targetY - this.currentY) * smooth;
 
