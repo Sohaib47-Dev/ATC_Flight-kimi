@@ -55,12 +55,12 @@ class ProductionConfig(Config):
 
 
 class TestingConfig(Config):
+    """In-memory SQLite; CSRF off — for automated checks or local smoke runs."""
     TESTING = True
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     WTF_CSRF_ENABLED = False
     RADAR_SIM_USE_ETO = False
     RADAR_SIM_ETO_BYPASS = True
-    #: Unit tests assert nominal NM advance; keep strict 1.0 while prod defaults may boost visibility.
     RADAR_SIM_VISUAL_MULTIPLIER = 1.0
     RADAR_TEST_MONITOR = False
 
