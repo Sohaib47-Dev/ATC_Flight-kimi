@@ -216,7 +216,6 @@ Edit `modules/sample_data.py` and add to `SAMPLE_FLIGHT_PLANS` list:
 - `RADAR_DEMO_MODE` - When `true`, multiplies only the **interpolation progress** on the radar (not the stored aircraft speed field)
 - `RADAR_DEMO_ANIMATION_SPEED` - Demo multiplier (e.g. `3.0`) used with `RADAR_DEMO_MODE`
 - `RADAR_SIM_VISUAL_MULTIPLIER` - Multiplies server `along_nm` advance per tick for demo visibility (default **3.0**; use `1` for nominal NM/sec; see radar Tier B)
-- `RADAR_TEST_AUTO_SEED` - When `true`, first defense Socket.IO connect seeds one active track per FIR entry (callsigns `RTST00`…; skips if any `RTST%` flight plan already exists). On by default in **development** only.
 - `RADAR_TEST_MONITOR` - When `true`, each sim tick validates entry resolution, non-empty path, motion, and route corridor; logs structured errors and optional autofixes. Emits `radar_test_stats` over Socket.IO for the small radar overlay.
 - `RADAR_TEST_CORRIDOR_NM` / `RADAR_TEST_STUCK_TICKS` - Monitor thresholds (defaults **12** NM corridor, **12** ticks without `along_nm` progress mid-route).
 - When the monitor detects an issue it emits **`RADAR_TEST_EVENT`** lines with a JSON payload (search the app log for that prefix).

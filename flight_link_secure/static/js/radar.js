@@ -2755,10 +2755,45 @@ function airwaySliceStart(tokens, firEntry) {
 
 const _ORIENT_TIE_EPS_NM = 1e-6;
 
+function waypointLatLonFromRouteToken(tok) {
+    if (!tok) return null;
+    const g = WAYPOINT_TABLE[tok];
+    if (!g || !Number.isFinite(g.lat) || !Number.isFinite(g.lon)) return null;
+    return { lat: g.lat, lon: g.lon };
+}
+
+/** Named fix before airway, else last point (airway-to-airway join). */
+function anchorLatLonForAirwayTrim(tokens, i, prev) {
+    if (i > 0) {
+        const w = waypointLatLonFromRouteToken(tokens[i - 1]);
+        if (w) return w;
+    }
+    if (prev && Number.isFinite(prev.lat) && Number.isFinite(prev.lon)) {
+        return { lat: prev.lat, lon: prev.lon };
+    }
+    return null;
+}
+
+/** Drop vertices before the polyline point nearest anchor (filed join fix). */
+function trimPolylineFromAnchor(ordered, anchor) {
+    if (!ordered || !ordered.length || !anchor) return ordered;
+    if (!Number.isFinite(anchor.lat) || !Number.isFinite(anchor.lon)) return ordered;
+    let bestJ = 0;
+    let bestD = Infinity;
+    for (let j = 0; j < ordered.length; j++) {
+        const p = ordered[j];
+        const d = haversineNm(anchor.lat, anchor.lon, p.lat, p.lon);
+        if (d < bestD - 1e-9 || (Math.abs(d - bestD) <= 1e-9 && j < bestJ)) {
+            bestD = d;
+            bestJ = j;
+        }
+    }
+    return ordered.slice(bestJ);
+}
+
 function flattenAirwayPointsForRouteTokens(firEntry, tokens) {
     const pts = [];
     const start = airwaySliceStart(tokens, firEntry);
-    const slice = tokens.slice(start);
     const entryCoord = getResolvedEntryCoordinate(firEntry);
     let prev =
         entryCoord &&
@@ -2767,7 +2802,9 @@ function flattenAirwayPointsForRouteTokens(firEntry, tokens) {
             ? { lat: entryCoord.lat, lon: entryCoord.lon }
             : null;
 
-    for (const tok of slice) {
+    for (let i = start; i < tokens.length; i++) {
+        const tok = tokens[i];
+        const anchorLl = anchorLatLonForAirwayTrim(tokens, i, prev);
         const list = AIRSPACE_ROUTE_RULES[tok];
         if (!list) continue;
         for (const aid of list) {
@@ -2775,14 +2812,15 @@ function flattenAirwayPointsForRouteTokens(firEntry, tokens) {
             if (!poly || !poly.length) continue;
             let ordered;
             if (!prev) {
-                ordered = poly;
+                ordered = poly.slice();
             } else {
                 const first = poly[0];
                 const lastV = poly[poly.length - 1];
                 const d0 = haversineNm(prev.lat, prev.lon, first.lat, first.lon);
                 const d1 = haversineNm(prev.lat, prev.lon, lastV.lat, lastV.lon);
-                ordered = d0 <= d1 + _ORIENT_TIE_EPS_NM ? poly : [...poly].reverse();
+                ordered = d0 <= d1 + _ORIENT_TIE_EPS_NM ? poly.slice() : [...poly].reverse();
             }
+            ordered = trimPolylineFromAnchor(ordered, anchorLl);
             for (const p of ordered) {
                 const last = pts[pts.length - 1];
                 if (

@@ -32,6 +32,43 @@ class RouteBuilderTests(unittest.TestCase):
         _, total_nm = cumulative_nm_polyline(path)
         self.assertGreater(total_nm, 150.0, "L750 leg should add substantial track distance")
 
+    def test_vikit_rk_l750_biros_skips_merun_vertex(self):
+        """Filed join at RK: do not run L750 from MERUN after VIKIT (trim airway at anchor)."""
+        path = route_builder.build_simulated_route_path("VIKIT", "VIKIT RK L750 BIROS")
+        self.assertGreaterEqual(len(path), 3)
+        wps = route_builder.all_waypoints_latlon()
+        rk = wps["RK"]
+        merun = wps["MERUN"]
+        self.assertLess(
+            haversine_nm(path[1][0], path[1][1], rk[0], rk[1]),
+            1.0,
+            "second vertex should be RK on L750, not MERUN",
+        )
+        self.assertGreater(
+            haversine_nm(path[1][0], path[1][1], merun[0], merun[1]),
+            5.0,
+            "second vertex must not be MERUN (old full-L750-from-start behavior)",
+        )
+
+    def test_sulom_a466_m875_chain_uses_jhang_not_gugal(self):
+        """Direct A466 then M875: trim M875 from end of A466 (JHANG), not from GUGAL."""
+        path = route_builder.build_simulated_route_path("SULOM", "SULOM A466 M875 LAJAK")
+        self.assertGreaterEqual(len(path), 4)
+        wps = route_builder.all_waypoints_latlon()
+        jh = wps["JHANG"]
+        gg = wps["GUGAL"]
+        self.assertLess(haversine_nm(path[1][0], path[1][1], jh[0], jh[1]), 1.0)
+        self.assertGreater(haversine_nm(path[1][0], path[1][1], gg[0], gg[1]), 50.0)
+
+    def test_sulom_a466_jhang_m875_hangu_lajak_non_degenerate(self):
+        path = route_builder.build_simulated_route_path(
+            "SULOM",
+            "SULOM A466 JHANG M875 HANGU LAJAK",
+        )
+        self.assertGreaterEqual(len(path), 5)
+        _, total_nm = cumulative_nm_polyline(path)
+        self.assertGreater(total_nm, 200.0)
+
     def test_g325_bidirectional_same_track_length(self):
         fwd = route_builder.build_simulated_route_path("PURPA", "PURPA G325 ASSVIB")
         rev = route_builder.build_simulated_route_path("ASSVIB", "ASSVIB G325 PURPA")

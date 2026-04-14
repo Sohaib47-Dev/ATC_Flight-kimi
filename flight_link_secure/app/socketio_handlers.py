@@ -51,9 +51,5 @@ def register_radar_socketio(app: Flask, socketio: SocketIO) -> None:
             return False
         if not app.config.get("TESTING") and not _broadcast_started:
             _broadcast_started = True
-            with app.app_context():
-                from app.services import radar_test_seed
-
-                radar_test_seed.try_auto_seed(app)
             socketio.start_background_task(radar_broadcast_loop)
         return True

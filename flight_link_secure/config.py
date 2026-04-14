@@ -32,8 +32,6 @@ class Config:
     except ValueError:
         _vis = 1.0
     RADAR_SIM_VISUAL_MULTIPLIER = max(0.0, min(_vis, 50.0))
-    #: Auto-create ``RTST*`` tracks for every FIR entry (defense radar stress test).
-    RADAR_TEST_AUTO_SEED = os.environ.get("RADAR_TEST_AUTO_SEED", "").lower() in ("1", "true", "yes", "on")
     #: After each sim tick, validate routes/motion and log structured errors.
     RADAR_TEST_MONITOR = os.environ.get("RADAR_TEST_MONITOR", "").lower() in ("1", "true", "yes", "on")
     try:
@@ -49,7 +47,6 @@ class Config:
 class DevelopmentConfig(Config):
     DEBUG = True
     #: Local stress-test defaults (override with env ``RADAR_TEST_*``).
-    RADAR_TEST_AUTO_SEED = os.environ.get("RADAR_TEST_AUTO_SEED", "true").lower() in ("1", "true", "yes", "on")
     RADAR_TEST_MONITOR = os.environ.get("RADAR_TEST_MONITOR", "true").lower() in ("1", "true", "yes", "on")
 
 
@@ -65,7 +62,6 @@ class TestingConfig(Config):
     RADAR_SIM_ETO_BYPASS = True
     #: Unit tests assert nominal NM advance; keep strict 1.0 while prod defaults may boost visibility.
     RADAR_SIM_VISUAL_MULTIPLIER = 1.0
-    RADAR_TEST_AUTO_SEED = False
     RADAR_TEST_MONITOR = False
 
 

@@ -110,6 +110,42 @@ def _airway_slice_start(tokens: list[str], fir_entry: str | None) -> int:
 _ORIENT_TIE_EPS_NM = 1e-6
 
 
+def _haversine_nm(a: tuple[float, float], b: tuple[float, float]) -> float:
+    from app.services.kinematics import haversine_nm
+
+    return haversine_nm(a[0], a[1], b[0], b[1])
+
+
+def _trim_polyline_from_anchor(
+    ordered: list[tuple[float, float]],
+    anchor_ll: tuple[float, float] | None,
+) -> list[tuple[float, float]]:
+    """Drop vertices before the polyline point nearest ``anchor_ll`` (filed join fix)."""
+    if not ordered or anchor_ll is None:
+        return ordered
+    best_j = min(
+        range(len(ordered)),
+        key=lambda j: (_haversine_nm(anchor_ll, ordered[j]), j),
+    )
+    return ordered[best_j:]
+
+
+def _anchor_ll_for_airway_trim(
+    tokens: list[str],
+    i: int,
+    wps: dict[str, tuple[float, float]],
+    prev_ll: tuple[float, float] | None,
+) -> tuple[float, float] | None:
+    """Named fix before airway, else last point (airway-to-airway join)."""
+    if i > 0:
+        prev_wp = wps.get(tokens[i - 1])
+        if prev_wp:
+            return float(prev_wp[0]), float(prev_wp[1])
+    if prev_ll is not None:
+        return prev_ll
+    return None
+
+
 def flatten_airway_points_for_route_tokens(
     tokens: list[str],
     fir_entry: str | None = None,
@@ -118,31 +154,29 @@ def flatten_airway_points_for_route_tokens(
     start = _airway_slice_start(tokens, fir_entry)
     rules = _airspace_rules()
     polys = _airway_polylines()
+    wps = all_waypoints_latlon()
     prev_ll: tuple[float, float] | None = resolve_fir_entry_lat_lon(fir_entry)
 
-    for tok in tokens[start:]:
+    for i in range(start, len(tokens)):
+        tok = tokens[i]
+        anchor_ll = _anchor_ll_for_airway_trim(tokens, i, wps, prev_ll)
         for aid in rules.get(tok, []):
             poly = polys.get(aid.upper())
             if not poly:
                 continue
             if prev_ll is None:
-                ordered = poly
+                ordered = list(poly)
             else:
                 d0 = _haversine_nm(prev_ll, poly[0])
                 d1 = _haversine_nm(prev_ll, poly[-1])
-                ordered = poly if d0 <= d1 + _ORIENT_TIE_EPS_NM else list(reversed(poly))
+                ordered = list(poly) if d0 <= d1 + _ORIENT_TIE_EPS_NM else list(reversed(poly))
+            ordered = _trim_polyline_from_anchor(ordered, anchor_ll)
             for lat, lon in ordered:
                 if pts and abs(pts[-1][0] - lat) < 1e-8 and abs(pts[-1][1] - lon) < 1e-8:
                     continue
                 pts.append((lat, lon))
                 prev_ll = (lat, lon)
     return pts
-
-
-def _haversine_nm(a: tuple[float, float], b: tuple[float, float]) -> float:
-    from app.services.kinematics import haversine_nm
-
-    return haversine_nm(a[0], a[1], b[0], b[1])
 
 
 def ensure_entry_at_start(
