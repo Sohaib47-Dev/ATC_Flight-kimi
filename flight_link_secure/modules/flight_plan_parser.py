@@ -7,6 +7,12 @@ import re
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
+from modules.icao_validation import (
+    validate_aircraft_type as icao_validate_aircraft_type,
+    validate_callsign as icao_validate_callsign,
+    validate_icao_airport as icao_validate_icao_airport,
+)
+
 # Pakistan FIR entry fixes (canonical names). Order in this list does **not**
 # determine which entry is chosen; :meth:`_extract_fir_entry` walks **route
 # tokens** in sequence and returns the first token that appears here.
@@ -134,7 +140,7 @@ class FlightPlanParser:
         }
         
         # Extract callsign from FPL- header
-        callsign_match = re.search(r'\(FPL-([A-Z0-9]+)-', normalized)
+        callsign_match = re.search(r'\(FPL-([A-Z0-9]{3,7})-', normalized)
         if callsign_match:
             candidates['callsign'].append(callsign_match.group(1))
         
@@ -232,12 +238,22 @@ class FlightPlanParser:
         Format: (FPL-CALLSIGN-...
         """
         if candidates['callsign']:
-            return candidates['callsign'][0]
+            callsign = candidates['callsign'][0]
+            ok, _ = icao_validate_callsign(callsign)
+            if ok:
+                return callsign
+            self.errors.append("Invalid callsign format in ICAO header")
+            return None
         
         # Fallback: search for FPL pattern
-        match = re.search(r'FPL-([A-Z0-9]+)', normalized)
+        match = re.search(r'FPL-([A-Z0-9]{3,7})', normalized)
         if match:
-            return match.group(1)
+            callsign = match.group(1)
+            ok, _ = icao_validate_callsign(callsign)
+            if ok:
+                return callsign
+            self.errors.append("Invalid callsign format in ICAO header")
+            return None
         
         return None
     
@@ -251,12 +267,14 @@ class FlightPlanParser:
         if type_match:
             aircraft_type = type_match.group(1)
             # Validate common aircraft type formats
-            if re.match(r'^[A-Z]\d{2,3}[A-Z]?$', aircraft_type):
+            valid, _ = icao_validate_aircraft_type(aircraft_type)
+            if valid:
                 return aircraft_type
         
         # Check candidates if direct match fails
         for candidate in candidates['aircraft_types']:
-            if re.match(r'^[A-Z]\d{2,3}[A-Z]?$', candidate):
+            valid, _ = icao_validate_aircraft_type(candidate)
+            if valid:
                 return candidate
         
         return None
@@ -294,10 +312,18 @@ class FlightPlanParser:
         destination = None
         
         if len(valid_pairs) >= 1:
-            departure = valid_pairs[0][0]
+            dep = valid_pairs[0][0]
+            if icao_validate_icao_airport(dep, "Departure")[0]:
+                departure = dep
+            else:
+                self.errors.append("Departure aerodrome is not a valid ICAO code")
         
         if len(valid_pairs) >= 2:
-            destination = valid_pairs[1][0]
+            dest = valid_pairs[1][0]
+            if icao_validate_icao_airport(dest, "Destination")[0]:
+                destination = dest
+            else:
+                self.errors.append("Destination aerodrome is not a valid ICAO code")
         
         return departure, destination
 
@@ -376,10 +402,7 @@ def parse_flight_plan(raw_flight_plan: str) -> Optional[Dict]:
 
 def validate_callsign(callsign: str) -> bool:
     """Validate callsign format"""
-    if not callsign:
-        return False
-    # Callsign should be alphanumeric, 2-7 characters
-    return bool(re.match(r'^[A-Z0-9]{2,7}$', callsign.upper()))
+    return icao_validate_callsign(callsign)[0]
 
 
 def get_pakistan_fir_entries() -> List[str]:

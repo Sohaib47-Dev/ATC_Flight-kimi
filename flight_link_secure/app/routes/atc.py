@@ -185,18 +185,30 @@ def atc_api_flight_plan_form_parse():
     """Parse raw ICAO text into structured form fields (JSON)."""
     data = request.get_json(silent=True) or {}
     raw = (data.get('raw_flight_plan') or '').strip()
+    if not raw:
+        return jsonify(
+            {
+                'ok': False,
+                'fields': default_form_fields(),
+                'notes': ['Empty flight plan'],
+                'parser_ok': False,
+                'parser_errors': ['Empty flight plan'],
+            }
+        ), 400
+
     fields, notes = parse_raw_to_form_fields(raw)
     parser = FlightPlanParser()
     parsed = parser.parse(raw)
+    parser_ok = parsed is not None
     return jsonify(
         {
-            'ok': True,
+            'ok': parser_ok,
             'fields': fields,
             'notes': notes,
-            'parser_ok': parsed is not None,
-            'parser_errors': parser.get_errors() if not parsed else [],
+            'parser_ok': parser_ok,
+            'parser_errors': parser.get_errors() if not parser_ok else [],
         }
-    )
+    ), (200 if parser_ok else 400)
 
 
 @bp.route('/atc/edit-flight-plan/<int:plan_id>', methods=['GET', 'POST'])

@@ -8,6 +8,13 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from modules.icao_validation import (
+    normalize_icao_token,
+    validate_aircraft_type,
+    validate_callsign,
+    validate_icao_airport,
+)
+
 _FIELD15_HEAD_RE = re.compile(
     r"^((?:N|K)\d{3,5}[FAWS]\d{3,4}|M\d{3}[FAWS]\d{3,4})\s*(.*)$",
     re.IGNORECASE | re.DOTALL,
@@ -40,9 +47,6 @@ def default_form_fields() -> dict[str, str]:
     }
 
 
-_ICAO_AD = re.compile(r"^[A-Z]{4}$")
-
-
 def build_icao_fpl(fields: dict[str, Any]) -> str:
     """Assemble a multi-line ICAO FPL string from structured fields.
 
@@ -54,21 +58,24 @@ def build_icao_fpl(fields: dict[str, Any]) -> str:
         if k in d and v is not None:
             d[k] = str(v)
 
-    cs = d["callsign"].strip().upper()
-    if not cs:
-        raise ValueError("callsign is required")
+    cs = normalize_icao_token(d["callsign"])
+    cs_ok, cs_msg = validate_callsign(cs)
+    if not cs_ok:
+        raise ValueError(cs_msg)
 
     fr = (d["flight_rules"] or "I").strip().upper()[:1] or "I"
     tf = (d["type_of_flight"] or "S").strip().upper()[:1] or "S"
-    ac = (d["aircraft_type"] or "").strip().upper()
-    if not ac:
-        raise ValueError("aircraft_type is required")
+    ac = normalize_icao_token(d["aircraft_type"])
+    ac_ok, ac_msg = validate_aircraft_type(ac)
+    if not ac_ok:
+        raise ValueError(ac_msg)
     wtc = (d["wake_turbulence"] or "M").strip().upper()[:1] or "M"
     eq = (d["equipment"] or "").strip()
 
-    dep = (d["departure_aerodrome"] or "").strip().upper()[:4]
-    if not _ICAO_AD.match(dep):
-        raise ValueError("departure_aerodrome must be a 4-letter ICAO code")
+    dep = normalize_icao_token(d["departure_aerodrome"])[:4]
+    dep_ok, dep_msg = validate_icao_airport(dep, "Departure aerodrome")
+    if not dep_ok:
+        raise ValueError(dep_msg)
     dep_t = _four_digits(d["departure_time_utc"])
 
     spd = (d["cruise_speed"] or "N0450").strip().upper()
@@ -77,9 +84,10 @@ def build_icao_fpl(fields: dict[str, Any]) -> str:
     if not route:
         raise ValueError("route is required")
 
-    dest = (d["destination_aerodrome"] or "").strip().upper()[:4]
-    if not _ICAO_AD.match(dest):
-        raise ValueError("destination_aerodrome must be a 4-letter ICAO code")
+    dest = normalize_icao_token(d["destination_aerodrome"])[:4]
+    dest_ok, dest_msg = validate_icao_airport(dest, "Destination aerodrome")
+    if not dest_ok:
+        raise ValueError(dest_msg)
     dest_t = _four_digits(d["destination_time_utc"])
     alt_suf = (d["alternate_suffix"] or "").strip()
     if alt_suf and not alt_suf.startswith(" "):
@@ -145,15 +153,25 @@ def parse_raw_to_form_fields(raw: str) -> tuple[dict[str, str], list[str]]:
     # First line: (FPL-CS-XX
     first = lines[0].upper()
     first = first.rstrip(")")
-    m0 = re.match(r"^\(\s*FPL-([A-Z0-9]+)-([A-Z]{2})\s*$", first)
+    m0 = re.match(r"^\(\s*FPL-([A-Z0-9]{3,7})-([A-Z]{2})\s*$", first)
     if m0:
-        out["callsign"] = m0.group(1)
+        cs = m0.group(1)
+        ok, _ = validate_callsign(cs)
+        if ok:
+            out["callsign"] = cs
+        else:
+            notes.append("Callsign in header is not a valid ICAO airline/GA format")
         out["flight_rules"] = m0.group(2)[0]
         out["type_of_flight"] = m0.group(2)[1]
     else:
-        m0b = re.match(r"^\(\s*FPL-([A-Z0-9]+)-([A-Z])\s*$", first)
+        m0b = re.match(r"^\(\s*FPL-([A-Z0-9]{3,7})-([A-Z])\s*$", first)
         if m0b:
-            out["callsign"] = m0b.group(1)
+            cs = m0b.group(1)
+            ok, _ = validate_callsign(cs)
+            if ok:
+                out["callsign"] = cs
+            else:
+                notes.append("Callsign in header is not a valid ICAO airline/GA format")
             out["flight_rules"] = m0b.group(2)
             notes.append("Could not parse flight rules/type (single letter); defaulting type S")
             out["type_of_flight"] = "S"
@@ -168,13 +186,23 @@ def parse_raw_to_form_fields(raw: str) -> tuple[dict[str, str], list[str]]:
         m_ac_eq = re.match(r"^([A-Z0-9]{2,4})/([A-Z])-(.+)$", body)
         m_ac_only = re.match(r"^([A-Z0-9]{2,4})/([A-Z])$", body)
         if m_ac_eq:
-            out["aircraft_type"] = m_ac_eq.group(1)
-            out["wake_turbulence"] = m_ac_eq.group(2)
-            out["equipment"] = m_ac_eq.group(3).strip()
+            ac = m_ac_eq.group(1)
+            ok, _ = validate_aircraft_type(ac)
+            if ok:
+                out["aircraft_type"] = ac
+                out["wake_turbulence"] = m_ac_eq.group(2)
+                out["equipment"] = m_ac_eq.group(3).strip()
+            else:
+                notes.append("Aircraft type is not a valid ICAO designator")
             i += 1
         elif m_ac_only:
-            out["aircraft_type"] = m_ac_only.group(1)
-            out["wake_turbulence"] = m_ac_only.group(2)
+            ac = m_ac_only.group(1)
+            ok, _ = validate_aircraft_type(ac)
+            if ok:
+                out["aircraft_type"] = ac
+                out["wake_turbulence"] = m_ac_only.group(2)
+            else:
+                notes.append("Aircraft type is not a valid ICAO designator")
             i += 1
         else:
             notes.append("Aircraft type / wake line not recognized; left blank")
@@ -193,9 +221,14 @@ def parse_raw_to_form_fields(raw: str) -> tuple[dict[str, str], list[str]]:
         body = lines[i].lstrip("-").strip().upper().rstrip(")")
         m_dep = re.match(r"^([A-Z]{4})(\d{4})$", body)
         if m_dep:
-            out["departure_aerodrome"] = m_dep.group(1)
-            out["departure_time_utc"] = m_dep.group(2)
-            i += 1
+            dep = m_dep.group(1)
+            ok, _ = validate_icao_airport(dep, "Departure aerodrome")
+            if ok:
+                out["departure_aerodrome"] = dep
+                out["departure_time_utc"] = m_dep.group(2)
+                i += 1
+            else:
+                notes.append("Departure line has invalid ICAO code")
         else:
             notes.append("Departure line not in ICAO#### form")
 
@@ -219,11 +252,16 @@ def parse_raw_to_form_fields(raw: str) -> tuple[dict[str, str], list[str]]:
         body = body.rstrip(")")
         m_dest = re.match(r"^([A-Z]{4})(\d{4})(\s+(.*))?$", body, re.I)
         if m_dest:
-            out["destination_aerodrome"] = m_dest.group(1).upper()
-            out["destination_time_utc"] = m_dest.group(2)
-            suf = (m_dest.group(4) or "").strip()
-            if suf:
-                out["alternate_suffix"] = suf
+            dest = m_dest.group(1).upper()
+            ok, _ = validate_icao_airport(dest, "Destination aerodrome")
+            if ok:
+                out["destination_aerodrome"] = dest
+                out["destination_time_utc"] = m_dest.group(2)
+                suf = (m_dest.group(4) or "").strip()
+                if suf:
+                    out["alternate_suffix"] = suf
+            else:
+                notes.append("Destination line has invalid ICAO code")
         else:
             notes.append("Destination line not parsed")
         i += 1

@@ -22,13 +22,25 @@
   }
 
   var ICAO_AD_RE = /^[A-Z]{4}$/;
+  var CALLSIGN_AIRLINE_RE = /^[A-Z]{3}[A-Z0-9]{1,4}$/;
+  var CALLSIGN_GA_N_RE = /^N\d{1,5}[A-Z]{0,2}$/;
+  var CALLSIGN_GA_REG_RE = /^[A-Z]{1,2}[A-Z0-9]{2,6}$/;
+  var AC_TYPE_RE = /^[A-Z][A-Z0-9]{1,3}$/;
+
+  function isValidCallsign(value) {
+    return (
+      CALLSIGN_AIRLINE_RE.test(value) ||
+      CALLSIGN_GA_N_RE.test(value) ||
+      CALLSIGN_GA_REG_RE.test(value)
+    );
+  }
 
   function validateRequired(root) {
     var errs = [];
     var cs = (val(root, "callsign") || "").trim().toUpperCase();
-    if (!cs) errs.push("callsign");
+    if (!isValidCallsign(cs)) errs.push("callsign (ICAO airline or GA format)");
     var ac = (val(root, "aircraft_type") || "").trim().toUpperCase();
-    if (ac.length < 2) errs.push("aircraft type");
+    if (!AC_TYPE_RE.test(ac) || ac === "ZZZZ") errs.push("aircraft type (2-4 ICAO designator)");
     var dep = (val(root, "departure_aerodrome") || "").trim().toUpperCase();
     if (!ICAO_AD_RE.test(dep)) errs.push("departure (4-letter ICAO)");
     var dest = (val(root, "destination_aerodrome") || "").trim().toUpperCase();
@@ -178,6 +190,9 @@
 
     form.querySelectorAll("[data-fpl-field]").forEach(function (el) {
       el.addEventListener("input", function () {
+        if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
+          el.value = String(el.value || "").toUpperCase();
+        }
         syncFromForm();
         scheduleParserCheck();
       });

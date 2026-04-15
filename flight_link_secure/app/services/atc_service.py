@@ -5,6 +5,12 @@ from app.extensions import db
 from app.models import DefenseMessage, FlightPlan, TrackData, User
 from modules.encryption import encrypt_track_data
 from modules.flight_plan_form_io import parse_raw_to_form_fields
+from modules.icao_validation import (
+    normalize_icao_token,
+    validate_aircraft_type,
+    validate_callsign,
+    validate_icao_airport,
+)
 from modules.flight_plan_parser import FlightPlanParser
 from modules.validators import validate_atc_estimates
 
@@ -55,8 +61,12 @@ def lookup_and_parse_flight_plan(callsign):
     Retrieve flight plan by callsign and parse.
     Returns dict: parsed_data (dict or None), error (str or None), flight_plan_id (int or None).
     """
+    callsign = normalize_icao_token(callsign)
     if not callsign:
         return {'parsed_data': None, 'error': 'Please enter a callsign', 'flight_plan_id': None}
+    cs_ok, cs_msg = validate_callsign(callsign)
+    if not cs_ok:
+        return {'parsed_data': None, 'error': cs_msg, 'flight_plan_id': None}
 
     flight_plan = FlightPlan.query.filter_by(callsign=callsign).first()
 
@@ -102,6 +112,32 @@ def process_estimates_submission(parsed_data, flight_plan_id, user_id, eto, cfl,
             'validation_result': validation_result,
             'submitted': False,
             'flash_error': None,
+            'log_ssr_block': None,
+            'log_track_created': None,
+        }
+
+    cs_ok, cs_msg = validate_callsign(parsed_data.get('callsign', ''))
+    ac_ok, ac_msg = validate_aircraft_type(parsed_data.get('aircraft_type', ''))
+    dep_ok, dep_msg = validate_icao_airport(parsed_data.get('departure', ''), "Departure")
+    dest_ok, dest_msg = validate_icao_airport(parsed_data.get('destination', ''), "Destination")
+    if not all((cs_ok, ac_ok, dep_ok, dest_ok)):
+        validation_result['valid'] = False
+        validation_result['errors'].extend(
+            [
+                msg
+                for ok, msg in (
+                    (cs_ok, cs_msg),
+                    (ac_ok, ac_msg),
+                    (dep_ok, dep_msg),
+                    (dest_ok, dest_msg),
+                )
+                if not ok
+            ]
+        )
+        return {
+            'validation_result': validation_result,
+            'submitted': False,
+            'flash_error': 'Flight plan contains invalid ICAO identifiers and cannot be activated.',
             'log_ssr_block': None,
             'log_track_created': None,
         }
@@ -234,6 +270,8 @@ def add_flight_plan_post(callsign, raw_flight_plan, replace_existing):
             ctx.update(extra)
         return ctx
 
+    callsign = normalize_icao_token(callsign)
+    raw_flight_plan = (raw_flight_plan or "").strip()
     if not callsign or not raw_flight_plan:
         return {
             'action': 'render',
@@ -242,12 +280,13 @@ def add_flight_plan_post(callsign, raw_flight_plan, replace_existing):
             'flash': ('All fields are required', 'error'),
         }
 
-    if not callsign.replace('-', '').isalnum() or len(callsign) < 3:
+    cs_ok, cs_msg = validate_callsign(callsign)
+    if not cs_ok:
         return {
             'action': 'render',
             'template': 'atc/add_flight_plan.html',
             'context': _add_ctx(),
-            'flash': ('Invalid callsign format', 'error'),
+            'flash': (cs_msg, 'error'),
         }
 
     parser = FlightPlanParser()
@@ -262,7 +301,8 @@ def add_flight_plan_post(callsign, raw_flight_plan, replace_existing):
             'flash': (f'Flight plan validation failed: {errors}', 'error'),
         }
 
-    icao_callsign = parsed.callsign
+    parsed_data = parsed.to_dict()
+    icao_callsign = parsed_data['callsign']
     if callsign != icao_callsign:
         return {
             'action': 'render',
@@ -273,6 +313,18 @@ def add_flight_plan_post(callsign, raw_flight_plan, replace_existing):
                 f'"{icao_callsign}". Please ensure both callsigns match.',
                 'error'
             ),
+        }
+
+    ac_ok, ac_msg = validate_aircraft_type(parsed_data.get('aircraft_type', ''))
+    dep_ok, dep_msg = validate_icao_airport(parsed_data.get('departure', ''), "Departure")
+    dest_ok, dest_msg = validate_icao_airport(parsed_data.get('destination', ''), "Destination")
+    if not all((ac_ok, dep_ok, dest_ok)):
+        errs = [msg for ok, msg in ((ac_ok, ac_msg), (dep_ok, dep_msg), (dest_ok, dest_msg)) if not ok]
+        return {
+            'action': 'render',
+            'template': 'atc/add_flight_plan.html',
+            'context': _add_ctx(),
+            'flash': (f'Flight plan validation failed: {"; ".join(errs)}', 'error'),
         }
 
     existing = FlightPlan.query.filter_by(callsign=callsign).first()
@@ -382,16 +434,29 @@ def edit_flight_plan_post(flight_plan, raw_flight_plan):
             'flash': (f'Flight plan validation failed: {errors}', 'error'),
         }
 
-    if parsed.callsign != flight_plan.callsign:
+    parsed_data = parsed.to_dict()
+    if parsed_data['callsign'] != flight_plan.callsign:
         return {
             'action': 'render',
             'template': 'atc/edit_flight_plan.html',
             'context': _edit_flight_plan_template_ctx(flight_plan, raw_flight_plan),
             'flash': (
-                f'ICAO callsign in the plan is "{parsed.callsign}" but this record is '
+                f'ICAO callsign in the plan is "{parsed_data["callsign"]}" but this record is '
                 f'"{flight_plan.callsign}". The filed callsign must match.',
                 'error',
             ),
+        }
+
+    ac_ok, ac_msg = validate_aircraft_type(parsed_data.get('aircraft_type', ''))
+    dep_ok, dep_msg = validate_icao_airport(parsed_data.get('departure', ''), "Departure")
+    dest_ok, dest_msg = validate_icao_airport(parsed_data.get('destination', ''), "Destination")
+    if not all((ac_ok, dep_ok, dest_ok)):
+        errs = [msg for ok, msg in ((ac_ok, ac_msg), (dep_ok, dep_msg), (dest_ok, dest_msg)) if not ok]
+        return {
+            'action': 'render',
+            'template': 'atc/edit_flight_plan.html',
+            'context': _edit_flight_plan_template_ctx(flight_plan, raw_flight_plan),
+            'flash': (f'Flight plan validation failed: {"; ".join(errs)}', 'error'),
         }
 
     flight_plan.raw_flight_plan = raw_flight_plan.strip()
@@ -461,7 +526,12 @@ def delete_atc_flight_plan(flight_plan, terminate_tracks):
 
 def get_api_flight_plan(callsign):
     """Return (success, payload_or_errors, http_code)."""
-    flight_plan = FlightPlan.query.filter_by(callsign=callsign.upper()).first()
+    callsign = normalize_icao_token(callsign)
+    cs_ok, cs_msg = validate_callsign(callsign)
+    if not cs_ok:
+        return False, {'error': cs_msg}, 400
+
+    flight_plan = FlightPlan.query.filter_by(callsign=callsign).first()
 
     if not flight_plan:
         return False, {'error': 'Flight plan not found'}, 404
