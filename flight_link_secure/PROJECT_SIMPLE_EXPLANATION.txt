@@ -1,0 +1,995 @@
+FLIGHT-LINK SECURE - SIMPLE FULL PROJECT EXPLANATION
+====================================================
+
+What this file gives you:
+- Simple explanation of the complete project.
+- Every file explained.
+- "Line-by-line style" explanation using LOGICAL LINE BLOCKS
+  (for readability, lines are grouped like 1-20, 21-40, etc).
+
+------------------------------------------------------------------
+1) PROJECT IDEA IN SIMPLE WORDS
+------------------------------------------------------------------
+
+This is a Flask web app for ATC + Defense workflow:
+
+1. ATC stores or retrieves a flight plan by CALLSIGN.
+2. System parses ICAO plan text and extracts:
+   - callsign
+   - aircraft type
+   - departure
+   - destination
+   - fir entry, speed, route
+3. ATC enters estimates (ETO/CFL/SSR) to create an active track.
+4. Track is encrypted and sent to defense side.
+5. Defense sees tracks in dashboard + radar (HTTP and WebSocket updates).
+6. Admin can manage users, logs, flight plans, tracks, and data integrity checks.
+
+------------------------------------------------------------------
+2) FULL FILE-BY-FILE EXPLANATION
+------------------------------------------------------------------
+
+NOTE:
+- For very large files, explanation is done in logical line blocks.
+- This still covers all code behavior, just in grouped form.
+
+========================
+APP CORE
+========================
+
+File: app/__init__.py
+Purpose:
+- Creates Flask app and connects everything.
+Key symbols:
+- create_app()
+Line blocks:
+- 1-10: imports and root path setup.
+- 11-27: create Flask app and load config.
+- 28-36: initialize db/csrf/login/socketio.
+- 37-48: user loader + register blueprints.
+- 50-53: register socket handlers.
+- 54-64: custom 403/404 handlers.
+Flow relevance:
+- Indirect; this enables all ATC/Defense logic.
+
+File: app/extensions.py
+Purpose:
+- Holds extension instances in one place.
+Key symbols:
+- db, login_manager, csrf, socketio
+Line blocks:
+- 1-5: docs/imports
+- 7-10: extension objects
+Flow relevance:
+- Infrastructure for all input/storage/real-time.
+
+File: app.py
+Purpose:
+- Dev start entrypoint.
+Key symbols:
+- app = create_app()
+Line blocks:
+- 1-8: imports and app creation.
+- 9-17: init_db + sample data + socketio.run().
+Flow relevance:
+- Startup path only.
+
+File: wsgi.py
+Purpose:
+- WSGI export for production server.
+Key symbols:
+- app = create_app()
+Line blocks:
+- 1-4: import/create app.
+Flow relevance:
+- Deployment entry only.
+
+========================
+CONFIG
+========================
+
+File: config.py
+Purpose:
+- All environment-based settings.
+Key symbols:
+- Config, DevelopmentConfig, ProductionConfig, TestingConfig, config_by_name
+Line blocks:
+- 1-6: imports.
+- 7-45: base config (DB URL, radar options, monitor options).
+- 47-66: environment-specific overrides.
+- 68-72: config map.
+Flow relevance:
+- Controls runtime behavior of APIs/simulation/testing.
+
+File: config/radar_airways.json
+Purpose:
+- Route/airway/FIR coordinates used in simulation and radar.
+Key keys:
+- route_anchors, corrected_entry_points, fir_reference_markers, airspace_route_rules, airway_polylines
+Line blocks:
+- 1-16: anchors and fixed entry points.
+- 17-32: FIR markers.
+- 33-42: route-to-airway rules.
+- 43-94: airway line coordinate lists.
+Flow relevance:
+- Direct for route geometry after parsing route/fir entry.
+
+========================
+MODELS / DATABASE
+========================
+
+File: app/models/__init__.py
+Purpose:
+- SQLAlchemy schema for users/plans/tracks/messages/logs.
+Key classes:
+- User, FlightPlan, TrackData, SystemLog, DefenseMessage
+- init_db()
+Line blocks:
+- 1-10: imports/base setup.
+- 11-62: User model and auth helpers.
+- 63-82: FlightPlan (callsign + raw ICAO text).
+- 83-154: TrackData (callsign, aircraft_type, departure, destination, etc).
+- 156-177: SystemLog.
+- 179-200: DefenseMessage.
+- 202-233: create tables and seed default users.
+Flow relevance:
+- Core storage for callsign/aircraft/departure/destination.
+
+File: models.py
+Purpose:
+- Compatibility re-export of models.
+Key symbols:
+- Re-exports db and model classes.
+Line blocks:
+- 1-5: compatibility note.
+- 6-14: imports.
+- 16-24: __all__ exports.
+Flow relevance:
+- Indirect; keeps older imports working.
+
+========================
+AUTH / DECORATORS / ROUTE PACKAGE
+========================
+
+File: app/routes/__init__.py
+Purpose:
+- Route package marker.
+Line blocks:
+- 1: module doc.
+Flow relevance:
+- None.
+
+File: app/utils/__init__.py
+Purpose:
+- Utils package marker.
+Line blocks:
+- 1: module doc.
+Flow relevance:
+- None.
+
+File: app/utils/decorators.py
+Purpose:
+- Role guards.
+Key symbols:
+- admin_required, atc_required, defense_required
+Line blocks:
+- 1-6: imports.
+- 7-31: 3 decorators that block wrong-role access.
+Flow relevance:
+- Controls who may submit/retrieve/transfer data.
+
+File: app/routes/auth.py
+Purpose:
+- Login/logout and role-based redirects.
+Key routes:
+- /, /login, /logout
+Line blocks:
+- 1-12: imports/blueprint.
+- 13-24: route for root and role redirect.
+- 26-58: login POST, credential checks, redirect by role.
+- 61-68: logout.
+Flow relevance:
+- Entry gate to ATC/Defense flows.
+
+========================
+ATC ROUTES / SERVICES
+========================
+
+File: app/routes/atc.py
+Purpose:
+- ATC pages and APIs.
+Key routes:
+- /atc/dashboard
+- /atc/flight-plan
+- /atc/estimates
+- /atc/transfer
+- /atc/add-flight-plan
+- /atc/api/flight-plan/form-parse
+- /atc/edit-flight-plan/<id>
+- /atc/manage-flight-plans
+- /atc/delete-flight-plan/<id>
+- /api/validate-estimates
+- /api/flight-plan/<callsign>
+- /atc/deactivate-track/<id>
+Line blocks:
+- 1-14: imports and blueprint.
+- 15-55: ATC dashboard + retrieve by callsign.
+- 57-117: estimates flow and validation results.
+- 119-147: transfer to defense.
+- 149-179: add flight plan.
+- 181-212: raw parser API for form editor.
+- 214-245: edit flight plan.
+- 247-275: manage/delete.
+- 277-301: validate-estimates and flight-plan API.
+- 304-330: deactivate track JSON endpoint.
+Flow relevance:
+- Main HTTP entry for callsign/aircraft/dep/dest handling.
+
+File: app/services/atc_service.py
+Purpose:
+- ATC business rules and DB actions.
+Key symbols:
+- deactivate_track()
+- lookup_and_parse_flight_plan()
+- process_estimates_submission()
+- transfer_track_to_defense()
+- add_flight_plan_post()
+- edit_flight_plan_post()
+- delete_atc_flight_plan()
+- get_api_flight_plan()
+Line blocks:
+- 1-29: imports + custom exceptions.
+- 30-56: deactivate guard checks and update.
+- 59-90: callsign lookup + parser run.
+- 93-97: active track helper.
+- 100-199: estimate validation + create TrackData.
+- 201-243: encryption and DefenseMessage creation.
+- 245-393: add/replace plan checks.
+- 396-468: edit plan checks.
+- 471-524: delete/terminate logic.
+- 527-548: callsign API fetch and parse.
+Flow relevance:
+- Critical server-side validation and storage for all key fields.
+
+========================
+DEFENSE ROUTES / SERVICES
+========================
+
+File: app/routes/defense.py
+Purpose:
+- Defense pages and APIs.
+Key routes:
+- /defense/dashboard
+- /defense/radar
+- /api/defense/tracks
+- /api/defense/new-alerts
+- /defense/message/<id>
+Line blocks:
+- 1-10: imports/blueprint.
+- 12-23: dashboard.
+- 25-43: radar page and config values.
+- 45-59: tracks + alerts JSON APIs.
+- 62-80: message detail/decrypt.
+Flow relevance:
+- Consumes transferred callsign/aircraft/dep/dest data.
+
+File: app/services/defense_service.py
+Purpose:
+- Defense service logic.
+Key symbols:
+- get_defense_dashboard_context()
+- get_radar_context()
+- list_active_defense_tracks()
+- build_new_alerts_payload()
+- decrypt_message_and_mark_processed()
+Line blocks:
+- 1-9: imports.
+- 10-30: dashboard/radar context.
+- 32-56: track and alerts payload.
+- 59-68: decrypt + mark processed.
+Flow relevance:
+- Reads and presents transferred fields.
+
+========================
+ADMIN ROUTES / SERVICES
+========================
+
+File: app/routes/admin.py
+Purpose:
+- Admin pages and user/plan operations.
+Key routes:
+- admin dashboard/users/toggle/reset/update/flight_plans/track_data/logs/data_integrity/delete
+Line blocks:
+- 1-11: imports.
+- 12-31: dashboard and users page.
+- 37-92: user APIs.
+- 94-128: data pages.
+- 130-148: safe delete endpoint.
+Flow relevance:
+- Monitoring and maintenance of all stored records.
+
+File: app/services/admin_service.py
+Purpose:
+- Admin-side business and integrity checks.
+Key symbols:
+- get_admin_dashboard_payload()
+- toggle_user_active()
+- reset_user_password()
+- update_user_role_and_status()
+- get_data_integrity_context()
+- admin_delete_flight_plan_if_safe()
+Line blocks:
+- 1-6: imports.
+- 7-50: dashboard stats.
+- 53-69: user update helpers.
+- 72-127: integrity checks (duplicates/conflicts/orphans/parse errors).
+- 129-145: delete guard.
+Flow relevance:
+- Ensures callsign/SSR/plan-track consistency.
+
+========================
+RADAR / SIMULATION / REAL-TIME
+========================
+
+File: app/socketio_handlers.py
+Purpose:
+- SocketIO connect handler + broadcast loop.
+Key symbols:
+- register_radar_socketio()
+Line blocks:
+- 1-13: setup.
+- 14-42: background tick emits aircraft_update.
+- 43-55: connect auth and single loop start.
+Flow relevance:
+- Sends live track updates to defense radar.
+
+File: app/services/route_builder.py
+Purpose:
+- Build route polylines from route text and FIR entry.
+Key symbols:
+- resolve_fir_entry_lat_lon()
+- parse_route_tokens()
+- flatten_airway_points_for_route_tokens()
+- ensure_entry_at_start()
+- ensure_lajak_at_end()
+- build_simulated_route_path()
+- path_fingerprint()
+Line blocks:
+- 1-45: load config and lookup maps.
+- 47-70: FIR key normalization and lookup.
+- 73-108: token parse/rules.
+- 110-147: path direction helpers.
+- 149-195: airway flattening.
+- 197-243: enforce entry/start and path minimums.
+- 245-281: final builder/fingerprint.
+Flow relevance:
+- Uses parsed route/fir values from flight plan.
+
+File: app/services/kinematics.py
+Purpose:
+- Shared geo math and speed conversion.
+Key symbols:
+- haversine_nm(), parse_speed_to_knots(), latlon_to_svg_xy(), cumulative_nm_polyline(), interpolate_along_polyline()
+Line blocks:
+- 1-19: constants and docs.
+- 21-55: math/speed helpers.
+- 58-64: projection to SVG.
+- 67-101: path cumulative/interpolation.
+Flow relevance:
+- Moves aircraft positions for radar.
+
+File: app/services/simulation_service.py
+Purpose:
+- Server-side movement engine for active tracks.
+Key symbols:
+- advance_defense_tracks_and_build_payload()
+- defense_tracks_minimal_ws_payload()
+- ensure_track_last_simulated_column()
+Line blocks:
+- 1-35: imports/config.
+- 36-77: helper config/time parsing.
+- 79-170: per-track advancement.
+- 173-214: batch step + conflicts + monitor hooks.
+- 216-247: compact WebSocket payload.
+- 250-265: migration helper for simulation column.
+Flow relevance:
+- Moves tracks created from parsed flight plan info.
+
+File: app/services/radar_service.py
+Purpose:
+- Radar data read and coordinate utility functions.
+Key symbols:
+- resolve_fir_entry_lat_lon(), snap_lat_lon_to_polyline(), fetch_active_radar_tracks(), get_active_tracks_json()
+Line blocks:
+- 1-35: config waypoint sync.
+- 37-54: FIR normalize and resolve.
+- 56-113: nearest-point helpers.
+- 115-141: fetch active tracks and shape JSON.
+Flow relevance:
+- Supports defense view of parsed/transferred tracks.
+
+File: app/services/radar_test_monitor.py
+Purpose:
+- Optional QA monitor for radar movement anomalies.
+Key symbols:
+- process_tick(), get_last_stats(), min_nm_to_resolved_path()
+Line blocks:
+- 1-33: state/config.
+- 34-61: route distance metric.
+- 63-87: logging/stats.
+- 89-264: runtime validation checks and stats.
+Flow relevance:
+- Debug quality checks for route-driven movement.
+
+File: app/services/separation_engine.py
+Purpose:
+- Detect same-level conflicts by distance.
+Key symbols:
+- TrackSnapshot, same_flight_level(), find_conflict_ids()
+Line blocks:
+- 1-19: model and constants.
+- 20-31: flight-level compare.
+- 33-46: pairwise conflict detection.
+Flow relevance:
+- Enhances radar payload with conflict markers.
+
+========================
+SUPPORT SERVICES
+========================
+
+File: app/services/audit_service.py
+Purpose:
+- Writes audit logs.
+Key symbols:
+- log_action()
+Line blocks:
+- 1-8: setup.
+- 9-19: build + commit log row.
+Flow relevance:
+- Logs actions in callsign/track workflows.
+
+File: app/services/__init__.py
+Purpose:
+- Services package marker.
+Line blocks:
+- 1: doc.
+Flow relevance:
+- None.
+
+========================
+MODULES (PARSING / VALIDATION / ENCRYPTION / SEEDING)
+========================
+
+File: modules/icao_validation.py
+Purpose:
+- Strict reusable validators.
+Key symbols:
+- normalize_icao_token()
+- validate_callsign()
+- validate_aircraft_type()
+- validate_icao_airport()
+Line blocks:
+- 1-20: regex profiles.
+- 22-24: normalize.
+- 26-40: callsign validation.
+- 43-51: aircraft type validation.
+- 54-60: airport validation.
+Flow relevance:
+- Central validation for key fields.
+
+File: modules/flight_plan_parser.py
+Purpose:
+- Two-layer ICAO parser.
+Key symbols:
+- ParsedFlightPlan
+- FlightPlanParser
+- parse_flight_plan()
+- validate_callsign()
+- get_pakistan_fir_entries()
+Line blocks:
+- 1-34: constants and regex patterns.
+- 35-49: speed-token helper.
+- 51-74: parsed dataclass output.
+- 76-110: parse() orchestration.
+- 111-180: normalization + candidate extraction.
+- 182-234: semantic selection and object creation.
+- 235-328: extract callsign/type/dep/dest methods.
+- 330-378: FIR entry and speed extraction.
+- 380-410: errors/warnings getters and convenience exports.
+Flow relevance:
+- Core extraction of callsign/aircraft/departure/destination.
+
+File: modules/flight_plan_form_io.py
+Purpose:
+- Structured form <-> raw ICAO conversion.
+Key symbols:
+- default_form_fields()
+- build_icao_fpl()
+- parse_raw_to_form_fields()
+Line blocks:
+- 1-23: docs, regex, helper.
+- 24-47: default field map.
+- 50-123: build ICAO text from form with validation.
+- 125-136: speed/level split helper.
+- 138-285: parse raw text into form fields + notes.
+Flow relevance:
+- Main ATC add/edit form conversion path.
+
+File: modules/validators.py
+Purpose:
+- ETO/CFL/SSR validation.
+Key symbols:
+- ATCValidator
+- validate_atc_estimates()
+- format_time_display()
+Line blocks:
+- 1-17: setup/constants.
+- 18-53: CFL validation.
+- 55-116: SSR validation and correction.
+- 118-170: ETO validation and UTC->PST conversion.
+- 173-215: aggregate result.
+- 219-229: convenience functions.
+Flow relevance:
+- Validates estimates before track activation.
+
+File: modules/encryption.py
+Purpose:
+- Encrypt/decrypt track payloads.
+Key symbols:
+- SecureTransfer, MockSecureTransfer, EncryptionManager
+- encrypt_track_data(), decrypt_track_data()
+Line blocks:
+- 1-12: imports.
+- 13-84: Fernet implementation.
+- 87-106: mock implementation.
+- 109-124: manager + wrappers.
+Flow relevance:
+- Used when ATC transfers to defense.
+
+File: modules/sample_data.py
+Purpose:
+- Seed demo flight plans.
+Key symbols:
+- SAMPLE_FLIGHT_PLANS
+- populate_sample_data()
+- get_sample_callsigns()
+Line blocks:
+- 1-6: imports.
+- 8-49: sample entries.
+- 52-73: insert-if-missing logic.
+- 76-85: helper/main run.
+Flow relevance:
+- Demo starting data for callsigns/routes.
+
+========================
+STATIC JAVASCRIPT
+========================
+
+File: static/js/icao_flight_plan_form.js
+Purpose:
+- Frontend ICAO form engine.
+Key symbols:
+- initIcaoFlightPlanForm()
+- buildRawFromForm()
+- applyFromRawText()
+- checkParserServer()
+Line blocks:
+- 1-51: helper functions and required validation.
+- 53-94: build raw ICAO message.
+- 96-143: init and live sync.
+- 145-189: parser status state UI.
+- 191-247: raw<->form parser API integration.
+- 248-317: copy/reset/draft save/load tools.
+- 319-344: submit protection and boot.
+Flow relevance:
+- Frontend enforcement of callsign/aircraft/dep/dest.
+
+File: static/js/radar.js
+Purpose:
+- Full defense radar rendering and behavior logic.
+Key symbols:
+- Utility functions/constants.
+- Classes: Aircraft, ConflictDetector, RadarRenderer, RadarEngine
+Line blocks (very large file):
+- 1-~200: global config/util helpers.
+- ~200-2374: radar UI and logic helpers.
+- 2375-3014: FIR markers/airway polylines/path math.
+- 3015-3059: FIR boundary generation.
+- 3060-3481: Aircraft behavior/model.
+- 3482-3529: conflict detection.
+- 3530-3911: renderer.
+- 3912-4076: engine orchestration and updates.
+- 4077-4238: debug/boot helpers.
+Flow relevance:
+- Final visualization of transferred track fields.
+
+========================
+TEMPLATES - ATC
+========================
+
+File: templates/atc/add_flight_plan.html
+Purpose:
+- Add flight plan page.
+Key sections:
+- duplicate callsign replace flow
+- main structured form include
+- guidelines and JS init
+Line blocks:
+- 1-15: page header.
+- 18-45: duplicate warning + replace form.
+- 47-70: add form.
+- 72-84: guidelines.
+- 90-105: JS initialization.
+Flow relevance:
+- Direct add path for key fields.
+
+File: templates/atc/edit_flight_plan.html
+Purpose:
+- Edit flight plan page (same callsign locked).
+Line blocks:
+- 1-17: heading and record context.
+- 19-44: edit form include.
+- 50-65: JS init (edit mode).
+Flow relevance:
+- Direct update path for raw plan.
+
+File: templates/atc/_icao_fpl_form_fields.html
+Purpose:
+- Shared structured ICAO form fields component.
+Key sections:
+- required callsign/aircraft/dep/dest/route
+- hidden raw_flight_plan
+- parser status and raw editor
+Line blocks:
+- 1-22: local styles.
+- 23-55: callsign + flight rules/type.
+- 58-79: aircraft/wake/equipment.
+- 81-110: departure/time/speed/level/route.
+- 112-131: destination and suffix.
+- 133-143: field18/other info.
+- 145-172: hidden raw + tool buttons + parser status.
+- 174-182: live output panel.
+Flow relevance:
+- Main input form for all required identifiers.
+
+File: templates/atc/flight_plan.html
+Purpose:
+- Retrieve plan by callsign and display parsed values.
+Line blocks:
+- 1-16: page title/nav.
+- 17-47: callsign search form.
+- 49-54: error display.
+- 55-120: parsed cards + continue button.
+Flow relevance:
+- Retrieval stage from callsign to parsed fields.
+
+File: templates/atc/estimates.html
+Purpose:
+- Enter estimates and submit active track.
+Line blocks:
+- 1-16: heading.
+- 17-40: success-after-submit state.
+- 41-107: already-active block.
+- 108-161: flight summary.
+- 163-274: estimate form.
+- 276-319: validation rule tips.
+- 323-585: JS live validation behavior.
+Flow relevance:
+- Uses parsed callsign/aircraft/dep/dest context for activation.
+
+File: templates/atc/dashboard.html
+Purpose:
+- ATC dashboard with recent tracks and deactivation actions.
+Line blocks:
+- 1-14: title.
+- 15-91: table of tracks.
+- 93-122: modal/toast UI.
+- 124-227: deactivate JS actions.
+Flow relevance:
+- Operational view by callsign/route/status.
+
+File: templates/atc/manage_flight_plans.html
+Purpose:
+- List/manage plans with view/edit/delete.
+Line blocks:
+- 1-23: heading and add button.
+- 24-117: plans table.
+- 118-238: view/delete modals.
+- 239-255: empty state.
+- 258-284: style/script helpers.
+Flow relevance:
+- Direct management of callsign and raw plans.
+
+========================
+TEMPLATES - DEFENSE
+========================
+
+File: templates/defense/dashboard.html
+Purpose:
+- Defense overview with messages and active tracks.
+Line blocks:
+- 1-14: heading.
+- 15-48: quick actions.
+- 50-99: messages table.
+- 101-152: active tracks table.
+Flow relevance:
+- Shows transferred callsign/aircraft/dep/dest.
+
+File: templates/defense/message_detail.html
+Purpose:
+- Show decrypted message details.
+Line blocks:
+- 1-29: header/success status.
+- 31-133: flight/estimate detail cards.
+- 136-168: metadata panel.
+- 170-183: action buttons.
+Flow relevance:
+- Direct display of transferred identifiers and estimates.
+
+File: templates/defense/radar.html
+Purpose:
+- Radar page structure and bootstrapping.
+Line blocks:
+- 5-514: CSS for radar look/feel.
+- 516-657: radar page HTML/SVG layers.
+- 659-681: optional test panel.
+- 683-689: alert audio.
+- 692-1056: JS bootstrap and controls.
+Flow relevance:
+- Final visual stage for live tracks.
+
+========================
+TEMPLATES - ADMIN
+========================
+
+File: templates/admin/dashboard.html
+Purpose:
+- Admin overview and recent activity.
+Line blocks:
+- 1-14: heading.
+- 15-117: stat cards.
+- 119-158: quick action cards.
+- 160-281: activity tables.
+- 284-341: recent logins.
+Flow relevance:
+- Monitoring only.
+
+File: templates/admin/users.html
+Purpose:
+- Manage users (role/status/password reset).
+Line blocks:
+- 1-16: heading.
+- 17-101: users table.
+- 103-156: edit modal.
+- 159-247: JS action handlers.
+- 249-266: modal style.
+Flow relevance:
+- Access management.
+
+File: templates/admin/flight_plans.html
+Purpose:
+- Search/view/delete flight plans.
+Line blocks:
+- 1-16: heading.
+- 17-53: filters.
+- 54-103: table.
+- 105-145: plan modals.
+- 148-225: JS filtering/deletion.
+- 227-245: style.
+Flow relevance:
+- Direct callsign/raw plan inspection.
+
+File: templates/admin/track_data.html
+Purpose:
+- Table of all track records.
+Line blocks:
+- 1-16: heading.
+- 17-80: track table rows.
+Flow relevance:
+- Direct view of callsign/aircraft/dep/dest.
+
+File: templates/admin/logs.html
+Purpose:
+- System logs with filter tools.
+Line blocks:
+- 1-16: heading.
+- 17-71: filter form controls.
+- 73-149: logs table.
+- 152-210: filtering JS.
+Flow relevance:
+- Audits workflow events.
+
+File: templates/admin/data_integrity.html
+Purpose:
+- Integrity checks page.
+Line blocks:
+- 1-16: heading.
+- 17-59: summary cards.
+- 61-115: duplicate callsigns list.
+- 117-171: SSR conflict table.
+- 173-216: orphan tracks.
+- 218-257: parser issue plans.
+- 260-287: delete helper script.
+Flow relevance:
+- Quality control for plan/track data.
+
+========================
+SHARED TEMPLATES
+========================
+
+File: templates/base.html
+Purpose:
+- Shared layout/theme/navbar/footer.
+Line blocks:
+- 1-559: global CSS theme.
+- 563-654: role-based top navigation.
+- 656-672: flash + content block.
+- 674-689: footer.
+- 692-694: script includes.
+Flow relevance:
+- Common shell only.
+
+File: templates/index.html
+Purpose:
+- Public landing page.
+Line blocks:
+- 5-207: page style.
+- 209-258: content and login CTA.
+Flow relevance:
+- None directly.
+
+File: templates/login.html
+Purpose:
+- Login UI.
+Line blocks:
+- 1-257: login page CSS.
+- 259-325: login form and hints.
+- 327-329: scripts.
+Flow relevance:
+- Entry gate.
+
+========================
+TESTS
+========================
+
+File: tests/__init__.py
+Purpose:
+- Test package marker.
+Line blocks:
+- 1: comment.
+Flow relevance:
+- None.
+
+File: tests/test_icao_validation.py
+Purpose:
+- Tests core ICAO validators.
+Line blocks:
+- 1-9: imports.
+- 10-33: tests for valid/invalid callsign, aircraft, airport.
+- 35-36: run guard.
+Flow relevance:
+- Directly verifies core identifier validation.
+
+File: tests/test_flight_plan_parser.py
+Purpose:
+- Tests parser behavior.
+Line blocks:
+- 1-14: imports + sample FPL.
+- 15-37: valid parse + invalid type/destination tests.
+- 40-41: run guard.
+Flow relevance:
+- Ensures parser correctly accepts/rejects key fields.
+
+File: tests/test_flight_plan_form_io.py
+Purpose:
+- Tests form builder/parser conversion.
+Line blocks:
+- 1-5: imports.
+- 6-53: valid build and invalid identifier rejections.
+- 54-63: invalid destination parse note check.
+- 66-67: run guard.
+Flow relevance:
+- Verifies UI form conversion for key fields.
+
+File: tests/test_atc_service_validation.py
+Purpose:
+- Service-level validation and persistence tests.
+Line blocks:
+- 1-17: imports + sample FPL.
+- 18-34: app/db test setup and teardown.
+- 35-68: tests (invalid callsign reject, valid persist, bad API callsign, invalid parsed fields blocked).
+- 71-72: run guard.
+Flow relevance:
+- Verifies server-side enforcement before DB storage.
+
+========================
+DOCS / SCRIPTS / META
+========================
+
+File: README.md
+Purpose:
+- Main docs (setup, architecture, env vars, role workflows).
+Line blocks:
+- 1-39: overview and features.
+- 41-108: installation/run.
+- 111-135: project structure.
+- 139-192: component descriptions.
+- 195-235: usage and env vars.
+- 238-264: deployment and notes.
+Flow relevance:
+- Human documentation of flow.
+
+File: requirements.txt
+Purpose:
+- Python dependency pins.
+Line blocks:
+- 1-9: package list.
+Flow relevance:
+- Runtime dependencies.
+
+File: start.sh
+Purpose:
+- Shell helper to run app on Linux/macOS.
+Line blocks:
+- 1-21: checks.
+- 23-26: pip install.
+- 27-44: launch app.
+Flow relevance:
+- Startup only.
+
+File: CRITICAL_FIXES_REPORT.md
+Purpose:
+- Historical fix report.
+Line blocks:
+- 1-14: intro.
+- 15-79: cascade delete fix.
+- 81-147: modal fix.
+- 149-223: duplicate activation block.
+- 226-308: SSR duplicate block.
+- 311-507: tests and recommendations.
+Flow relevance:
+- Documents important safeguards in workflow.
+
+------------------------------------------------------------------
+3) MOST IMPORTANT DATA FLOW (SUPER SIMPLE)
+------------------------------------------------------------------
+
+1. User fills ATC form:
+   - templates/atc/_icao_fpl_form_fields.html
+   - static/js/icao_flight_plan_form.js
+
+2. Backend validates/parses:
+   - modules/icao_validation.py
+   - modules/flight_plan_form_io.py
+   - modules/flight_plan_parser.py
+   - app/services/atc_service.py
+
+3. Stored in DB:
+   - app/models/__init__.py (FlightPlan and TrackData)
+
+4. Defense transfer:
+   - app/services/atc_service.py (transfer)
+   - modules/encryption.py
+   - app/models/__init__.py (DefenseMessage)
+
+5. Defense/radar consumption:
+   - app/routes/defense.py
+   - app/services/defense_service.py
+   - app/services/simulation_service.py
+   - app/services/route_builder.py
+   - templates/defense/radar.html
+   - static/js/radar.js
+
+6. Safety checks:
+   - tests/*.py
+   - templates/admin/data_integrity.html + admin_service checks
+
+------------------------------------------------------------------
+4) IF YOU WANT TRUE "EVERY SINGLE LINE" EXPLANATION
+------------------------------------------------------------------
+
+This file explains each file and each code area in grouped line blocks.
+If you want literal 1-by-1 line commentary for any specific file,
+start with one file at a time (for example: modules/flight_plan_parser.py),
+and it can be produced in deep detail.
+
